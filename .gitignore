@@ -1,16 +1,26 @@
 # Compiled binaries
 matrix_generator
 gemm_benchmark
+ab_matrix_generator
+ab_gemm_benchmark
+simple_matrix_generator
+simple_gemm_benchmark
 
 # Matrix files
 M_cond_*.txt
+A_*.txt
+B_*.txt
 matrices_*/
+ab_matrices_*/
+my_matrices*/
 
 # Test folders
 test_matrices_*/
 
 # Benchmark results
 gemm_benchmark_*.csv
+ab_gemm_benchmark_*.csv
+simple_gemm_benchmark_*.csv
 
 # Object files
 *.o
