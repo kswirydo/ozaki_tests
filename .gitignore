@@ -1,0 +1,28 @@
+# Compiled binaries
+matrix_generator
+gemm_benchmark
+
+# Matrix files
+M_cond_*.txt
+matrices_*/
+
+# Test folders
+test_matrices_*/
+
+# Benchmark results
+gemm_benchmark_*.csv
+
+# Object files
+*.o
+*.obj
+
+# Editor files
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
