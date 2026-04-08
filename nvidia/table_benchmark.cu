@@ -1,8 +1,8 @@
 /**
  * Table benchmark — CUDA port of ../table_benchmark.cu
  *
- * Compile:
- *   nvcc -O3 -std=c++17 table_benchmark.cu -o table_benchmark \
+ * Compile (use -arch matching your GPU, e.g. sm_100 for Blackwell; see ../Makefile):
+ *   nvcc -arch=sm_100 -O3 -std=c++17 table_benchmark.cu -o table_benchmark \
  *        -I${GEMMUL8_PATH}/include -L${GEMMUL8_PATH}/lib -lgemmul8 \
  *        -lcublas -lcusolver -lcurand -lcudart
  */
