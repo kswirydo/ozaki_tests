@@ -10,12 +10,18 @@
  * Usage:
  *   ./ab_gemm_benchmark <matrix_folder>
  *   
- *   matrix_folder - Folder containing A_*_cond1e*.txt and B_*_cond1e*.txt files
+ *   matrix_folder - Folder containing matrix pairs:
+ *     - Condition number: A_*_cond1e*.txt and B_*_cond1e*.txt
+ *     - Aspect ratio:     A_*_ratio1e*.txt and B_*_ratio1e*.txt
  */
 
 #include <hip/hip_runtime.h>
 #include <hipblas/hipblas.h>
 #include "gemmul8.hpp"
+
+// Include internal header to access profiling flag
+// This allows GEMMUL8_PROFILE=1 to work
+namespace oz2 { extern bool g_profiling_enabled; }
 
 #include <iostream>
 #include <fstream>
@@ -30,6 +36,7 @@
 #include <dirent.h>
 #include <regex>
 #include <map>
+#include <cstdlib>
 
 #define HIP_CHECK(call)                                                         \
     do {                                                                        \
@@ -124,7 +131,8 @@ struct MatrixPair {
  */
 std::vector<MatrixPair> find_matrix_pairs(const std::string& folder) {
     std::vector<MatrixPair> pairs;
-    std::map<int, MatrixPair> pair_map;
+    std::map<int, MatrixPair> pair_map_cond;  // For condition number matrices
+    std::map<int, MatrixPair> pair_map_ratio; // For aspect ratio matrices
     
     DIR* dir = opendir(folder.c_str());
     if (!dir) {
@@ -132,35 +140,65 @@ std::vector<MatrixPair> find_matrix_pairs(const std::string& folder) {
         return pairs;
     }
     
-    std::regex pattern_A("A_(\\d+)x(\\d+)_cond1e(\\d+)\\.txt");
-    std::regex pattern_B("B_(\\d+)x(\\d+)_cond1e(\\d+)\\.txt");
+    // Patterns for condition number matrices
+    std::regex pattern_A_cond("A_(\\d+)x(\\d+)_cond1e(\\d+)\\.txt");
+    std::regex pattern_B_cond("B_(\\d+)x(\\d+)_cond1e(\\d+)\\.txt");
+    // Patterns for aspect ratio matrices
+    std::regex pattern_A_ratio("A_(\\d+)x(\\d+)_ratio1e(\\d+)\\.txt");
+    std::regex pattern_B_ratio("B_(\\d+)x(\\d+)_ratio1e(\\d+)\\.txt");
     std::smatch match;
     
     struct dirent* entry;
     while ((entry = readdir(dir)) != nullptr) {
         std::string filename = entry->d_name;
         
-        if (std::regex_match(filename, match, pattern_A)) {
+        // Check condition number patterns
+        if (std::regex_match(filename, match, pattern_A_cond)) {
             int cond = std::stoi(match[3].str());
-            pair_map[cond].file_A = folder + "/" + filename;
-            pair_map[cond].N = std::stoull(match[1].str());
-            pair_map[cond].K = std::stoull(match[2].str());
-            pair_map[cond].log10_cond = cond;
+            pair_map_cond[cond].file_A = folder + "/" + filename;
+            pair_map_cond[cond].N = std::stoull(match[1].str());
+            pair_map_cond[cond].K = std::stoull(match[2].str());
+            pair_map_cond[cond].log10_cond = cond;
         }
-        else if (std::regex_match(filename, match, pattern_B)) {
+        else if (std::regex_match(filename, match, pattern_B_cond)) {
             int cond = std::stoi(match[3].str());
-            pair_map[cond].file_B = folder + "/" + filename;
+            pair_map_cond[cond].file_B = folder + "/" + filename;
             size_t K_B = std::stoull(match[1].str());
-            pair_map[cond].M = std::stoull(match[2].str());
-            if (pair_map[cond].K != 0 && pair_map[cond].K != K_B) {
+            pair_map_cond[cond].M = std::stoull(match[2].str());
+            if (pair_map_cond[cond].K != 0 && pair_map_cond[cond].K != K_B) {
                 std::cerr << "Warning: K dimension mismatch for condition 1e" << cond << std::endl;
+            }
+        }
+        // Check aspect ratio patterns
+        else if (std::regex_match(filename, match, pattern_A_ratio)) {
+            int ratio = std::stoi(match[3].str());
+            pair_map_ratio[ratio].file_A = folder + "/" + filename;
+            pair_map_ratio[ratio].N = std::stoull(match[1].str());
+            pair_map_ratio[ratio].K = std::stoull(match[2].str());
+            pair_map_ratio[ratio].log10_cond = ratio;  // Reuse field for aspect ratio
+        }
+        else if (std::regex_match(filename, match, pattern_B_ratio)) {
+            int ratio = std::stoi(match[3].str());
+            pair_map_ratio[ratio].file_B = folder + "/" + filename;
+            size_t K_B = std::stoull(match[1].str());
+            pair_map_ratio[ratio].M = std::stoull(match[2].str());
+            if (pair_map_ratio[ratio].K != 0 && pair_map_ratio[ratio].K != K_B) {
+                std::cerr << "Warning: K dimension mismatch for ratio 1e" << ratio << std::endl;
             }
         }
     }
     
     closedir(dir);
     
-    for (auto& kv : pair_map) {
+    // Collect condition number pairs
+    for (auto& kv : pair_map_cond) {
+        if (!kv.second.file_A.empty() && !kv.second.file_B.empty()) {
+            pairs.push_back(kv.second);
+        }
+    }
+    
+    // Collect aspect ratio pairs
+    for (auto& kv : pair_map_ratio) {
         if (!kv.second.file_A.empty() && !kv.second.file_B.empty()) {
             pairs.push_back(kv.second);
         }
@@ -405,13 +443,22 @@ void benchmark_matrix_pair(hipblasHandle_t handle, const MatrixPair& pair, std::
 void print_usage(const char* program_name) {
     std::cout << "Usage: " << program_name << " <matrix_folder>" << std::endl;
     std::cout << "\nBenchmarks C = A * B using native FP64 vs emulated (Ozaki-II)" << std::endl;
-    std::cout << "\nExpected files: A_NxK_cond1eX.txt and B_KxM_cond1eX.txt" << std::endl;
+    std::cout << "\nExpected files:" << std::endl;
+    std::cout << "  Condition number: A_NxK_cond1eX.txt and B_KxM_cond1eX.txt" << std::endl;
+    std::cout << "  Aspect ratio:     A_NxK_ratio1eX.txt and B_KxM_ratio1eX.txt" << std::endl;
 }
 
 int main(int argc, char* argv[]) {
     if (argc < 2 || std::string(argv[1]) == "-h" || std::string(argv[1]) == "--help") {
         print_usage(argv[0]);
         return (argc < 2) ? 1 : 0;
+    }
+    
+    // Check for GEMMUL8_PROFILE environment variable
+    const char* prof = getenv("GEMMUL8_PROFILE");
+    if (prof && std::string(prof) == "1") {
+        oz2::g_profiling_enabled = true;
+        std::cerr << "[GEMMUL8] Profiling enabled" << std::endl;
     }
     
     std::string matrix_folder = argv[1];
