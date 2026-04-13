@@ -49,19 +49,49 @@ int main(int argc, char* argv[]) {
     curandGenerator_t gen;
     CUBLAS_CHECK(cublasCreate(&cublas));
     CUSOLVER_CHECK(cusolverDnCreate(&cusolver));
-    CURAND_CHECK(curandCreateGenerator(&gen, CURAND_RNG_PSEUDO_DEFAULT));
-    CURAND_CHECK(curandSetPseudoRandomGeneratorSeed(gen, 12345ULL));
+    CURAND_CHECK(curandCreateGenerator(&gen,
+        CURAND_RNG_PSEUDO_DEFAULT
+    ));
+    CURAND_CHECK(curandSetPseudoRandomGeneratorSeed(gen,
+        12345ULL
+    ));
     double *d_A, *d_B, *d_C;
     void* d_work = nullptr;
-    size_t worksize = gemmul8::workSize(M, N, K, NUM_MODULI);
-    CUDA_CHECK(cudaMalloc(&d_A, size_A * sizeof(double)));
-    CUDA_CHECK(cudaMalloc(&d_B, size_B * sizeof(double)));
-    CUDA_CHECK(cudaMalloc(&d_C, size_C * sizeof(double)));
+    size_t worksize = gemmul8::workSize(M,
+        N,
+        K,
+        NUM_MODULI
+    );
+    CUDA_CHECK(cudaMalloc(&d_A,
+        size_A * sizeof(double)
+    ));
+    CUDA_CHECK(cudaMalloc(&d_B,
+        size_B * sizeof(double)
+    ));
+    CUDA_CHECK(cudaMalloc(&d_C,
+        size_C * sizeof(double)
+    ));
     std::cout << "Generating matrices..." << std::flush;
-    generate_conditioned_matrix_cuda(cublas, cusolver, gen, M, K, LOG10_COND, d_A);
-    generate_conditioned_matrix_cuda(cublas, cusolver, gen, K, N, LOG10_COND, d_B);
+    generate_conditioned_matrix_cuda(cublas,
+        cusolver,
+        gen,
+        M,
+        K,
+        LOG10_COND,
+        d_A
+    );
+    generate_conditioned_matrix_cuda(cublas,
+        cusolver,
+        gen,
+        K,
+        N,
+        LOG10_COND,
+        d_B
+    );
     std::cout << " done" << std::endl;
-    CUDA_CHECK(cudaMalloc(&d_work, worksize));
+    CUDA_CHECK(cudaMalloc(&d_work,
+        worksize
+    ));
     double alpha = 1.0, beta = 0.0;
     int block_size = 256;
     size_t num_blocks = (size_C + block_size - 1) / block_size;
@@ -69,14 +99,40 @@ int main(int argc, char* argv[]) {
     CUDA_CHECK(cudaDeviceSynchronize());
     std::cout << "Running Native FP64 GEMM..." << std::flush;
     for (int i = 0; i < NUM_WARMUP; i++) {
-        CUBLAS_CHECK(cublasDgemm(cublas, CUBLAS_OP_N, CUBLAS_OP_N, (int)M, (int)N, (int)K, &alpha, d_A, (int)M, d_B,
-                                 (int)K, &beta, d_C, (int)M));
+        CUBLAS_CHECK(cublasDgemm(cublas,
+            CUBLAS_OP_N,
+            CUBLAS_OP_N,
+            (int)M,
+            (int)N,
+            (int)K,
+            &alpha,
+            d_A,
+            (int)M,
+            d_B,
+            (int)K,
+            &beta,
+            d_C,
+            (int)M
+        ));
     }
     CUDA_CHECK(cudaDeviceSynchronize());
     auto start = std::chrono::high_resolution_clock::now();
     for (int i = 0; i < NUM_ITERATIONS; i++) {
-        CUBLAS_CHECK(cublasDgemm(cublas, CUBLAS_OP_N, CUBLAS_OP_N, (int)M, (int)N, (int)K, &alpha, d_A, (int)M, d_B,
-                                 (int)K, &beta, d_C, (int)M));
+        CUBLAS_CHECK(cublasDgemm(cublas,
+            CUBLAS_OP_N,
+            CUBLAS_OP_N,
+            (int)M,
+            (int)N,
+            (int)K,
+            &alpha,
+            d_A,
+            (int)M,
+            d_B,
+            (int)K,
+            &beta,
+            d_C,
+            (int)M
+        ));
     }
     CUDA_CHECK(cudaDeviceSynchronize());
     auto end = std::chrono::high_resolution_clock::now();
@@ -84,19 +140,55 @@ int main(int argc, char* argv[]) {
     double native_tflops = (2.0 * M * N * K) / (native_time * 1e12);
     std::cout << " " << std::fixed << std::setprecision(2) << native_tflops << " TFLOPS" << std::endl;
     std::vector<double> h_C_native(size_C);
-    CUDA_CHECK(cudaMemcpy(h_C_native.data(), d_C, size_C * sizeof(double), cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(h_C_native.data(),
+        d_C,
+        size_C * sizeof(double),
+        cudaMemcpyDeviceToHost
+    ));
     cm_zero_matrix_kernel<<<num_blocks, block_size>>>(d_C, size_C);
     CUDA_CHECK(cudaDeviceSynchronize());
     std::cout << "Running Ozaki-II GEMM (" << NUM_MODULI << " moduli)..." << std::flush;
     for (int i = 0; i < NUM_WARMUP; i++) {
-        gemmul8::gemm<double>(cublas, CUBLAS_OP_N, CUBLAS_OP_N, M, N, K, &alpha, d_A, M, d_B, K, &beta, d_C, M,
-                               NUM_MODULI, false, d_work);
+        gemmul8::gemm<double>(cublas,
+            CUBLAS_OP_N,
+            CUBLAS_OP_N,
+            M,
+            N,
+            K,
+            &alpha,
+            d_A,
+            M,
+            d_B,
+            K,
+            &beta,
+            d_C,
+            M,
+            NUM_MODULI,
+            false,
+            d_work
+        );
     }
     CUDA_CHECK(cudaDeviceSynchronize());
     start = std::chrono::high_resolution_clock::now();
     for (int i = 0; i < NUM_ITERATIONS; i++) {
-        gemmul8::gemm<double>(cublas, CUBLAS_OP_N, CUBLAS_OP_N, M, N, K, &alpha, d_A, M, d_B, K, &beta, d_C, M,
-                               NUM_MODULI, false, d_work);
+        gemmul8::gemm<double>(cublas,
+            CUBLAS_OP_N,
+            CUBLAS_OP_N,
+            M,
+            N,
+            K,
+            &alpha,
+            d_A,
+            M,
+            d_B,
+            K,
+            &beta,
+            d_C,
+            M,
+            NUM_MODULI,
+            false,
+            d_work
+        );
     }
     CUDA_CHECK(cudaDeviceSynchronize());
     end = std::chrono::high_resolution_clock::now();
@@ -104,8 +196,15 @@ int main(int argc, char* argv[]) {
     double ozaki_tflops = (2.0 * M * N * K) / (ozaki_time * 1e12);
     std::cout << " " << ozaki_tflops << " TFLOPS" << std::endl;
     std::vector<double> h_C_ozaki(size_C);
-    CUDA_CHECK(cudaMemcpy(h_C_ozaki.data(), d_C, size_C * sizeof(double), cudaMemcpyDeviceToHost));
-    double rel_error = compute_frobenius_rel_error(h_C_native.data(), h_C_ozaki.data(), size_C);
+    CUDA_CHECK(cudaMemcpy(h_C_ozaki.data(),
+        d_C,
+        size_C * sizeof(double),
+        cudaMemcpyDeviceToHost
+    ));
+    double rel_error = compute_frobenius_rel_error(h_C_native.data(),
+        h_C_ozaki.data(),
+        size_C
+    );
     std::cout << "\nResults:\n  Native FP64:  " << native_tflops << " TFLOPS\n  Ozaki-II:     " << ozaki_tflops
               << " TFLOPS\n  Speedup:      " << (ozaki_tflops / native_tflops) << "x\n  Rel. Error:   "
               << std::scientific << rel_error << std::endl;

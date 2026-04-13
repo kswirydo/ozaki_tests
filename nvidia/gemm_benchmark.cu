@@ -36,11 +36,16 @@ bool read_matrix_from_file(const std::string& filename, std::vector<double>& dat
     }
     std::vector<std::vector<double>> temp_data;
     std::string line;
-    while (std::getline(file, line)) {
+    while (std::getline(file,
+        line
+    )) {
         std::vector<double> row;
         std::stringstream ss(line);
         std::string value;
-        while (std::getline(ss, value, ',')) {
+        while (std::getline(ss,
+            value,
+            ','
+        )) {
             try {
                 row.push_back(std::stod(value));
             } catch (const std::exception&) {
@@ -111,7 +116,11 @@ void benchmark_matrix(cublasHandle_t handle, const std::string& filename, int lo
     std::cout << "========================================" << std::endl;
     std::vector<double> h_A;
     size_t m, n;
-    if (!read_matrix_from_file(filename, h_A, m, n)) {
+    if (!read_matrix_from_file(filename,
+        h_A,
+        m,
+        n
+    )) {
         std::cerr << "Skipping " << filename << std::endl;
         return;
     }
@@ -123,24 +132,60 @@ void benchmark_matrix(cublasHandle_t handle, const std::string& filename, int lo
     size_t matrix_size = m * n;
     size_t matrix_bytes = matrix_size * sizeof(double);
     double *d_A, *d_C_ref, *d_C_ozaki;
-    CUDA_CHECK(cudaMalloc(&d_A, matrix_bytes));
-    CUDA_CHECK(cudaMalloc(&d_C_ref, matrix_bytes));
-    CUDA_CHECK(cudaMalloc(&d_C_ozaki, matrix_bytes));
-    CUDA_CHECK(cudaMemcpy(d_A, h_A.data(), matrix_bytes, cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMalloc(&d_A,
+        matrix_bytes
+    ));
+    CUDA_CHECK(cudaMalloc(&d_C_ref,
+        matrix_bytes
+    ));
+    CUDA_CHECK(cudaMalloc(&d_C_ozaki,
+        matrix_bytes
+    ));
+    CUDA_CHECK(cudaMemcpy(d_A,
+        h_A.data(),
+        matrix_bytes,
+        cudaMemcpyHostToDevice
+    ));
     std::vector<double> h_C_ref(matrix_size);
     std::vector<double> h_C_ozaki(matrix_size);
     double alpha = 1.0;
     double beta = 0.0;
     std::cout << "\n--- cuBLAS DGEMM (FP64 reference) ---" << std::endl;
     for (int i = 0; i < NUM_WARMUP; i++) {
-        CUBLAS_CHECK(cublasDgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, (int)m, (int)n, (int)n, &alpha, d_A, (int)m, d_A,
-                                 (int)n, &beta, d_C_ref, (int)m));
+        CUBLAS_CHECK(cublasDgemm(handle,
+            CUBLAS_OP_N,
+            CUBLAS_OP_N,
+            (int)m,
+            (int)n,
+            (int)n,
+            &alpha,
+            d_A,
+            (int)m,
+            d_A,
+            (int)n,
+            &beta,
+            d_C_ref,
+            (int)m
+        ));
     }
     CUDA_CHECK(cudaDeviceSynchronize());
     auto start = std::chrono::high_resolution_clock::now();
     for (int i = 0; i < NUM_ITERATIONS; i++) {
-        CUBLAS_CHECK(cublasDgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, (int)m, (int)n, (int)n, &alpha, d_A, (int)m, d_A,
-                                 (int)n, &beta, d_C_ref, (int)m));
+        CUBLAS_CHECK(cublasDgemm(handle,
+            CUBLAS_OP_N,
+            CUBLAS_OP_N,
+            (int)m,
+            (int)n,
+            (int)n,
+            &alpha,
+            d_A,
+            (int)m,
+            d_A,
+            (int)n,
+            &beta,
+            d_C_ref,
+            (int)m
+        ));
     }
     CUDA_CHECK(cudaDeviceSynchronize());
     auto end = std::chrono::high_resolution_clock::now();
@@ -149,12 +194,24 @@ void benchmark_matrix(cublasHandle_t handle, const std::string& filename, int lo
     double cublas_tflops = cublas_gflops / 1000.0;
     std::cout << "  Time: " << cublas_time * 1000.0 << " ms" << std::endl;
     std::cout << "  Performance: " << cublas_tflops << " TFLOPS" << std::endl;
-    CUDA_CHECK(cudaMemcpy(h_C_ref.data(), d_C_ref, matrix_bytes, cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(h_C_ref.data(),
+        d_C_ref,
+        matrix_bytes,
+        cudaMemcpyDeviceToHost
+    ));
     std::cout << "\n--- Ozaki-II GEMM (GEMMul8) ---" << std::endl;
-    unsigned max_moduli = *std::max_element(NUM_MODULI_LIST.begin(), NUM_MODULI_LIST.end());
-    size_t worksize = gemmul8::workSize(m, n, n, max_moduli);
+    unsigned max_moduli = *std::max_element(NUM_MODULI_LIST.begin(),
+        NUM_MODULI_LIST.end()
+    );
+    size_t worksize = gemmul8::workSize(m,
+        n,
+        n,
+        max_moduli
+    );
     void* d_work;
-    CUDA_CHECK(cudaMalloc(&d_work, worksize));
+    CUDA_CHECK(cudaMalloc(&d_work,
+        worksize
+    ));
     results_file << "\n# Condition number: 10^" << log10_cond << ", Size: " << m << "x" << n << std::endl;
     results_file << "method,num_moduli,fastmode,time_ms,tflops,frob_rel_err,max_rel_err,avg_rel_err" << std::endl;
     results_file << "cuBLAS_FP64,0,N/A," << cublas_time * 1000.0 << "," << cublas_tflops << ",0,0,0" << std::endl;
@@ -163,26 +220,72 @@ void benchmark_matrix(cublasHandle_t handle, const std::string& filename, int lo
             bool fastmode = (fast_mode == 1);
             std::string mode_str = fastmode ? "fast" : "accurate";
             for (int i = 0; i < NUM_WARMUP; i++) {
-                gemmul8::gemm<double>(handle, CUBLAS_OP_N, CUBLAS_OP_N, m, n, n, &alpha, d_A, m, d_A, n, &beta,
-                                      d_C_ozaki, m, num_moduli, fastmode, d_work);
+                gemmul8::gemm<double>(handle,
+                    CUBLAS_OP_N,
+                    CUBLAS_OP_N,
+                    m,
+                    n,
+                    n,
+                    &alpha,
+                    d_A,
+                    m,
+                    d_A,
+                    n,
+                    &beta,
+                    d_C_ozaki,
+                    m,
+                    num_moduli,
+                    fastmode,
+                    d_work
+                );
             }
             CUDA_CHECK(cudaDeviceSynchronize());
             start = std::chrono::high_resolution_clock::now();
             for (int i = 0; i < NUM_ITERATIONS; i++) {
-                gemmul8::gemm<double>(handle, CUBLAS_OP_N, CUBLAS_OP_N, m, n, n, &alpha, d_A, m, d_A, n, &beta,
-                                      d_C_ozaki, m, num_moduli, fastmode, d_work);
+                gemmul8::gemm<double>(handle,
+                    CUBLAS_OP_N,
+                    CUBLAS_OP_N,
+                    m,
+                    n,
+                    n,
+                    &alpha,
+                    d_A,
+                    m,
+                    d_A,
+                    n,
+                    &beta,
+                    d_C_ozaki,
+                    m,
+                    num_moduli,
+                    fastmode,
+                    d_work
+                );
             }
             CUDA_CHECK(cudaDeviceSynchronize());
             end = std::chrono::high_resolution_clock::now();
             double ozaki_time = std::chrono::duration<double>(end - start).count() / NUM_ITERATIONS;
             double ozaki_gflops = (2.0 * m * n * n) / (ozaki_time * 1e9);
             double ozaki_tflops = ozaki_gflops / 1000.0;
-            CUDA_CHECK(cudaMemcpy(h_C_ozaki.data(), d_C_ozaki, matrix_bytes, cudaMemcpyDeviceToHost));
-            double frob_diff = compute_frobenius_diff(h_C_ref.data(), h_C_ozaki.data(), matrix_size);
-            double frob_norm = compute_frobenius_norm(h_C_ref.data(), matrix_size);
+            CUDA_CHECK(cudaMemcpy(h_C_ozaki.data(),
+                d_C_ozaki,
+                matrix_bytes,
+                cudaMemcpyDeviceToHost
+            ));
+            double frob_diff = compute_frobenius_diff(h_C_ref.data(),
+                h_C_ozaki.data(),
+                matrix_size
+            );
+            double frob_norm = compute_frobenius_norm(h_C_ref.data(),
+                matrix_size
+            );
             double frob_rel_err = (frob_norm > 0) ? frob_diff / frob_norm : 0.0;
             double max_rel_err, avg_rel_err;
-            compute_relative_error_stats(h_C_ref.data(), h_C_ozaki.data(), matrix_size, max_rel_err, avg_rel_err);
+            compute_relative_error_stats(h_C_ref.data(),
+                h_C_ozaki.data(),
+                matrix_size,
+                max_rel_err,
+                avg_rel_err
+            );
             std::cout << "  Moduli=" << num_moduli << " (" << mode_str << "): " << ozaki_time * 1000.0 << " ms, "
                       << ozaki_tflops << " TFLOPS, "
                       << "rel_err=" << std::scientific << frob_rel_err << std::fixed << std::endl;
@@ -200,7 +303,9 @@ void benchmark_matrix(cublasHandle_t handle, const std::string& filename, int lo
 
 std::string get_device_name() {
     cudaDeviceProp prop{};
-    CUDA_CHECK(cudaGetDeviceProperties(&prop, 0));
+    CUDA_CHECK(cudaGetDeviceProperties(&prop,
+        0
+    ));
     std::string name = prop.name;
     for (char& c : name) {
         if (c == ' ' || c == '/' || c == '\\') {
@@ -214,7 +319,9 @@ std::string get_timestamp() {
     auto now = std::chrono::system_clock::now();
     auto time = std::chrono::system_clock::to_time_t(now);
     std::stringstream ss;
-    ss << std::put_time(std::localtime(&time), "%Y-%m-%d_%H-%M-%S");
+    ss << std::put_time(std::localtime(&time),
+        "%Y-%m-%d_%H-%M-%S"
+    );
     return ss.str();
 }
 
@@ -241,11 +348,15 @@ int main(int argc, char* argv[]) {
     std::string device_name = get_device_name();
     std::string timestamp = get_timestamp();
     cudaDeviceProp prop{};
-    CUDA_CHECK(cudaGetDeviceProperties(&prop, 0));
+    CUDA_CHECK(cudaGetDeviceProperties(&prop,
+        0
+    ));
     std::cout << "Device: " << prop.name << std::endl;
     std::cout << "Memory: " << prop.totalGlobalMem / (1024 * 1024 * 1024.0) << " GB" << std::endl;
     size_t free_mem = 0, total_mem = 0;
-    CUDA_CHECK(cudaMemGetInfo(&free_mem, &total_mem));
+    CUDA_CHECK(cudaMemGetInfo(&free_mem,
+        &total_mem
+    ));
     std::cout << "Free memory: " << free_mem / (1024 * 1024 * 1024.0) << " GB" << std::endl << std::endl;
     cublasHandle_t handle;
     CUBLAS_CHECK(cublasCreate(&handle));
@@ -267,7 +378,11 @@ int main(int argc, char* argv[]) {
             continue;
         }
         test_file.close();
-        benchmark_matrix(handle, filepath, log10_cond, results_file);
+        benchmark_matrix(handle,
+            filepath,
+            log10_cond,
+            results_file
+        );
         matrices_processed++;
     }
     CUBLAS_CHECK(cublasDestroy(handle));

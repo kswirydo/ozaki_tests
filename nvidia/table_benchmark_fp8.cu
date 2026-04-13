@@ -1,20 +1,35 @@
 /**
- * Table benchmark — CUDA port of ../table_benchmark.cu
+ * Table benchmark — FP8 emulation path (cuBLASLt + Ozaki-II), same workload as table_benchmark.cu.
  *
- * Compile (use -arch matching your GPU, e.g. sm_100 for Blackwell; see ../Makefile):
- *   nvcc -arch=sm_100 -O3 -std=c++17 table_benchmark.cu -o table_benchmark \
+ * Uses GEMMul8's FP8 backend (see sibling ../GEMMul8/GEMMul8/sample/dgemm_cuBLASLt_fp8.cu).
+ *
+ * Build (from this directory): make table_benchmark_fp8
+ *   or: nvcc -arch=sm_100 -O3 -std=c++17 table_benchmark_fp8.cu -o table_benchmark_fp8 \
  *        -I${GEMMUL8_PATH}/include -L${GEMMUL8_PATH}/lib -lgemmul8 \
- *        -lcublas -lcusolver -lcurand -lcudart
+ *        -lcublas -lcublasLt -lcusolver -lcurand -lcudart
  */
 
 #include "cuda_conditioned_matrix.cuh"
 
 #include <chrono>
+#include <cublasLt.h>
 #include <iomanip>
 #include <iostream>
 #include <vector>
 
 #include "gemmul8.hpp"
+
+#define CUBLASLT_CHECK(call)                                                                 \
+    do {                                                                                     \
+        cublasStatus_t status = (call);                                                      \
+        if (status != CUBLAS_STATUS_SUCCESS) {                                               \
+            std::cerr << "cuBLASLt error at " << __FILE__ << ":" << __LINE__ << " status="   \
+                      << status << std::endl;                                                \
+            std::exit(1);                                                                    \
+        }                                                                                    \
+    } while (0)
+
+static constexpr gemmul8::Backend kEmuBackend = gemmul8::Backend::FP8;
 
 static const int NUM_WARMUP = 10;
 static const int NUM_ITERATIONS = 50;
@@ -30,7 +45,7 @@ double compute_frobenius_rel_error(const double* C_ref, const double* C_test, si
     return std::sqrt(diff_sum) / std::sqrt(norm_sum);
 }
 
-struct BenchmarkResult {
+struct BenchmarkResultFp8 {
     double native_tflops;
     double ozaki12_tflops;
     double ozaki12_error;
@@ -38,14 +53,16 @@ struct BenchmarkResult {
     double ozaki16_error;
 };
 
-BenchmarkResult run_benchmark(size_t n) {
-    BenchmarkResult result = {0, 0, 0, 0, 0};
+BenchmarkResultFp8 run_benchmark_fp8(size_t n) {
+    BenchmarkResultFp8 result = {0, 0, 0, 0, 0};
     size_t size = n * n;
     size_t bytes = size * sizeof(double);
     cublasHandle_t cublas;
+    cublasLtHandle_t cublas_lt;
     cusolverDnHandle_t cusolver;
     curandGenerator_t gen;
     CUBLAS_CHECK(cublasCreate(&cublas));
+    CUBLASLT_CHECK(cublasLtCreate(&cublas_lt));
     CUSOLVER_CHECK(cusolverDnCreate(&cusolver));
     CURAND_CHECK(curandCreateGenerator(&gen,
         CURAND_RNG_PSEUDO_DEFAULT
@@ -122,19 +139,20 @@ BenchmarkResult run_benchmark(size_t n) {
         bytes,
         cudaMemcpyDeviceToHost
     ));
-    size_t worksize = gemmul8::workSize(n,
-        n,
-        n,
-        16
-    );
-    void* d_work;
-    CUDA_CHECK(cudaMalloc(&d_work,
-        worksize
-    ));
+
     for (int moduli : {12, 16}) {
-        std::cerr << "  Benchmarking Ozaki-II (" << moduli << " moduli)..." << std::flush;
+        std::cerr << "  Benchmarking Ozaki-II FP8 (" << moduli << " moduli)..." << std::flush;
+        size_t worksize = gemmul8::workSize<false, kEmuBackend>(n,
+            n,
+            n,
+            static_cast<unsigned>(moduli)
+        );
+        void* d_work;
+        CUDA_CHECK(cudaMalloc(&d_work,
+            worksize
+        ));
         for (int i = 0; i < NUM_WARMUP; i++) {
-            gemmul8::gemm<double>(cublas,
+            gemmul8::gemmLt<double, kEmuBackend>(cublas_lt,
                 CUBLAS_OP_N,
                 CUBLAS_OP_N,
                 n,
@@ -148,7 +166,7 @@ BenchmarkResult run_benchmark(size_t n) {
                 &beta,
                 d_C_ozaki,
                 n,
-                moduli,
+                static_cast<unsigned>(moduli),
                 false,
                 d_work
             );
@@ -156,7 +174,7 @@ BenchmarkResult run_benchmark(size_t n) {
         CUDA_CHECK(cudaDeviceSynchronize());
         start = std::chrono::high_resolution_clock::now();
         for (int i = 0; i < NUM_ITERATIONS; i++) {
-            gemmul8::gemm<double>(cublas,
+            gemmul8::gemmLt<double, kEmuBackend>(cublas_lt,
                 CUBLAS_OP_N,
                 CUBLAS_OP_N,
                 n,
@@ -170,7 +188,7 @@ BenchmarkResult run_benchmark(size_t n) {
                 &beta,
                 d_C_ozaki,
                 n,
-                moduli,
+                static_cast<unsigned>(moduli),
                 false,
                 d_work
             );
@@ -196,13 +214,14 @@ BenchmarkResult run_benchmark(size_t n) {
             result.ozaki16_error = error;
         }
         std::cerr << " " << tflops << " TFLOPS, error=" << error << std::endl;
+        CUDA_CHECK(cudaFree(d_work));
     }
-    CUDA_CHECK(cudaFree(d_work));
     CUDA_CHECK(cudaFree(d_A));
     CUDA_CHECK(cudaFree(d_C_native));
     CUDA_CHECK(cudaFree(d_C_ozaki));
     CURAND_CHECK(curandDestroyGenerator(gen));
     CUSOLVER_CHECK(cusolverDnDestroy(cusolver));
+    CUBLASLT_CHECK(cublasLtDestroy(cublas_lt));
     CUBLAS_CHECK(cublasDestroy(cublas));
     return result;
 }
@@ -210,7 +229,7 @@ BenchmarkResult run_benchmark(size_t n) {
 void print_table_header() {
     std::cout << "+-------------+----------+----------+----------+-------------+-----------------------------+-----------------------------+"
               << std::endl;
-    std::cout << "| Matrix Size | Matrices | WS 12spl | WS 16spl | Native GEMM | Ozaki II (12 splits)        | Ozaki II (16 splits)        |"
+    std::cout << "| Matrix Size | Matrices | WS 12spl | WS 16spl | Native GEMM | Ozaki FP8 (12 splits)        | Ozaki FP8 (16 splits)        |"
               << std::endl;
     std::cout << "+-------------+----------+----------+----------+-------------+-----------------------------+-----------------------------+"
               << std::endl;
@@ -220,14 +239,14 @@ void print_table_header() {
               << std::endl;
 }
 
-void print_table_row(size_t n, const BenchmarkResult& r) {
+void print_table_row(size_t n, const BenchmarkResultFp8& r) {
     size_t matrix_mem = 2 * n * n * sizeof(double);
-    size_t ozaki_ws_12 = gemmul8::workSize(n,
+    size_t ozaki_ws_12 = gemmul8::workSize<false, kEmuBackend>(n,
         n,
         n,
         12
     );
-    size_t ozaki_ws_16 = gemmul8::workSize(n,
+    size_t ozaki_ws_16 = gemmul8::workSize<false, kEmuBackend>(n,
         n,
         n,
         16
@@ -249,11 +268,11 @@ void print_table_footer() {
               << std::endl;
 }
 
-void print_summary_table(const std::vector<size_t>& sizes, const std::vector<BenchmarkResult>& results) {
+void print_summary_table(const std::vector<size_t>& sizes, const std::vector<BenchmarkResultFp8>& results) {
     std::cout << std::endl;
     std::cout << "======================================================================================================================"
               << std::endl;
-    std::cout << "                                                  SUMMARY TABLE (CUDA)" << std::endl;
+    std::cout << "                              SUMMARY TABLE — FP8 emulation (cuBLASLt), CUDA" << std::endl;
     std::cout << "                                             Condition Number: 10^" << LOG10_COND << std::endl;
     std::cout << "======================================================================================================================"
               << std::endl;
@@ -276,10 +295,10 @@ int main(int argc, char* argv[]) {
     for (int i = 1; i < argc; i++) {
         sizes.push_back(std::stoull(argv[i]));
     }
-    std::vector<BenchmarkResult> results;
+    std::vector<BenchmarkResultFp8> results;
     for (size_t n : sizes) {
         std::cerr << "Processing " << n << "x" << n << "..." << std::endl;
-        results.push_back(run_benchmark(n));
+        results.push_back(run_benchmark_fp8(n));
         std::cerr << std::endl;
     }
     print_summary_table(sizes,

@@ -40,7 +40,9 @@ __global__ void compute_singular_values_kernel(double* sv, int n, double log10KA
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx < n) {
         double exponent = (n > 1) ? ((double)idx / (double)(n - 1) * log10KA) : 0.0;
-        sv[idx] = pow(10.0, exponent);
+        sv[idx] = pow(10.0,
+            exponent
+        );
     }
 }
 
@@ -48,20 +50,26 @@ std::string generate_timestamp() {
     auto now = std::chrono::system_clock::now();
     auto time = std::chrono::system_clock::to_time_t(now);
     std::stringstream ss;
-    ss << std::put_time(std::localtime(&time), "%Y%m%d_%H%M%S");
+    ss << std::put_time(std::localtime(&time),
+        "%Y%m%d_%H%M%S"
+    );
     return ss.str();
 }
 
 bool create_directory(const std::string& path) {
     struct stat st;
-    if (stat(path.c_str(), &st) == 0) {
+    if (stat(path.c_str(),
+        &st
+    ) == 0) {
         if (S_ISDIR(st.st_mode)) {
             return true;
         }
         std::cerr << "Error: " << path << " exists but is not a directory" << std::endl;
         return false;
     }
-    if (mkdir(path.c_str(), 0755) == 0) {
+    if (mkdir(path.c_str(),
+        0755
+    ) == 0) {
         return true;
     }
     std::cerr << "Error: Failed to create directory " << path << std::endl;
@@ -99,21 +107,59 @@ void generate_matrix(cublasHandle_t cublas, cusolverDnHandle_t cusolver, curandG
     double *d_U, *d_V, *d_S, *d_A, *d_temp;
     double *d_tau_U, *d_tau_V;
     double* d_singular_values;
-    CUDA_CHECK(cudaMalloc(&d_U, size_U * sizeof(double)));
-    CUDA_CHECK(cudaMalloc(&d_V, size_V * sizeof(double)));
-    CUDA_CHECK(cudaMalloc(&d_S, size_S * sizeof(double)));
-    CUDA_CHECK(cudaMalloc(&d_A, size_A * sizeof(double)));
-    CUDA_CHECK(cudaMalloc(&d_temp, size_A * sizeof(double)));
-    CUDA_CHECK(cudaMalloc(&d_tau_U, n * sizeof(double)));
-    CUDA_CHECK(cudaMalloc(&d_tau_V, n * sizeof(double)));
-    CUDA_CHECK(cudaMalloc(&d_singular_values, n * sizeof(double)));
+    CUDA_CHECK(cudaMalloc(&d_U,
+        size_U * sizeof(double)
+    ));
+    CUDA_CHECK(cudaMalloc(&d_V,
+        size_V * sizeof(double)
+    ));
+    CUDA_CHECK(cudaMalloc(&d_S,
+        size_S * sizeof(double)
+    ));
+    CUDA_CHECK(cudaMalloc(&d_A,
+        size_A * sizeof(double)
+    ));
+    CUDA_CHECK(cudaMalloc(&d_temp,
+        size_A * sizeof(double)
+    ));
+    CUDA_CHECK(cudaMalloc(&d_tau_U,
+        n * sizeof(double)
+    ));
+    CUDA_CHECK(cudaMalloc(&d_tau_V,
+        n * sizeof(double)
+    ));
+    CUDA_CHECK(cudaMalloc(&d_singular_values,
+        n * sizeof(double)
+    ));
     std::cout << "  Generating random matrices..." << std::endl;
-    CURAND_CHECK(curandGenerateNormalDouble(gen, d_U, size_U, 0.0, 1.0));
-    CURAND_CHECK(curandGenerateNormalDouble(gen, d_V, size_V, 0.0, 1.0));
+    CURAND_CHECK(curandGenerateNormalDouble(gen,
+        d_U,
+        size_U,
+        0.0,
+        1.0
+    ));
+    CURAND_CHECK(curandGenerateNormalDouble(gen,
+        d_V,
+        size_V,
+        0.0,
+        1.0
+    ));
     std::cout << "  Computing QR decomposition of U (" << m << "x" << n << ")..." << std::endl;
-    cusolver_thin_orthogonal_q(cusolver, m, n, d_U, m, d_tau_U);
+    cusolver_thin_orthogonal_q(cusolver,
+        m,
+        n,
+        d_U,
+        m,
+        d_tau_U
+    );
     std::cout << "  Computing QR decomposition of V (" << n << "x" << n << ")..." << std::endl;
-    cusolver_thin_orthogonal_q(cusolver, n, n, d_V, n, d_tau_V);
+    cusolver_thin_orthogonal_q(cusolver,
+        n,
+        n,
+        d_V,
+        n,
+        d_tau_V
+    );
     int block_size = 256;
     int num_blocks_zero = (int)((size_S + block_size - 1) / block_size);
     zero_matrix_kernel<<<num_blocks_zero, block_size>>>(d_S, size_S);
@@ -125,16 +171,51 @@ void generate_matrix(cublasHandle_t cublas, cusolverDnHandle_t cusolver, curandG
     std::cout << "  Computing A = U * S * V'..." << std::endl;
     double alpha = 1.0;
     double beta = 0.0;
-    CUBLAS_CHECK(cublasDgemm(cublas, CUBLAS_OP_N, CUBLAS_OP_N, m, n, n, &alpha, d_U, m, d_S, n, &beta, d_temp,
-                             m));
-    CUBLAS_CHECK(cublasDgemm(cublas, CUBLAS_OP_N, CUBLAS_OP_T, m, n, n, &alpha, d_temp, m, d_V, n, &beta, d_A, m));
+    CUBLAS_CHECK(cublasDgemm(cublas,
+        CUBLAS_OP_N,
+        CUBLAS_OP_N,
+        m,
+        n,
+        n,
+        &alpha,
+        d_U,
+        m,
+        d_S,
+        n,
+        &beta,
+        d_temp,
+        m
+    ));
+    CUBLAS_CHECK(cublasDgemm(cublas,
+        CUBLAS_OP_N,
+        CUBLAS_OP_T,
+        m,
+        n,
+        n,
+        &alpha,
+        d_temp,
+        m,
+        d_V,
+        n,
+        &beta,
+        d_A,
+        m
+    ));
     CUDA_CHECK(cudaDeviceSynchronize());
     std::cout << "  Copying result to host..." << std::endl;
     std::vector<double> h_A(size_A);
-    CUDA_CHECK(cudaMemcpy(h_A.data(), d_A, size_A * sizeof(double), cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(h_A.data(),
+        d_A,
+        size_A * sizeof(double),
+        cudaMemcpyDeviceToHost
+    ));
     std::string filename = output_folder + "/M_cond_1e" + std::to_string(log10KA) + ".txt";
     std::cout << "  Writing matrix to file..." << std::endl;
-    write_matrix_to_file(h_A.data(), m, n, filename);
+    write_matrix_to_file(h_A.data(),
+        m,
+        n,
+        filename
+    );
     CUDA_CHECK(cudaFree(d_U));
     CUDA_CHECK(cudaFree(d_V));
     CUDA_CHECK(cudaFree(d_S));
@@ -180,7 +261,9 @@ int main(int argc, char* argv[]) {
     }
     std::cout << "Output directory created/verified: " << output_folder << std::endl;
     size_t free_mem = 0, total_mem = 0;
-    CUDA_CHECK(cudaMemGetInfo(&free_mem, &total_mem));
+    CUDA_CHECK(cudaMemGetInfo(&free_mem,
+        &total_mem
+    ));
     std::cout << "GPU Memory: " << free_mem / (1024 * 1024 * 1024.0) << " GB free / "
               << total_mem / (1024 * 1024 * 1024.0) << " GB total" << std::endl;
     size_t required_mem =
@@ -195,11 +278,22 @@ int main(int argc, char* argv[]) {
     CUBLAS_CHECK(cublasCreate(&cublas));
     CUSOLVER_CHECK(cusolverDnCreate(&cusolver));
     curandGenerator_t gen;
-    CURAND_CHECK(curandCreateGenerator(&gen, CURAND_RNG_PSEUDO_DEFAULT));
-    CURAND_CHECK(curandSetPseudoRandomGeneratorSeed(gen, 12345ULL));
+    CURAND_CHECK(curandCreateGenerator(&gen,
+        CURAND_RNG_PSEUDO_DEFAULT
+    ));
+    CURAND_CHECK(curandSetPseudoRandomGeneratorSeed(gen,
+        12345ULL
+    ));
     for (int i = 1; i <= 16; i++) {
         int log10KA = 1 + i;
-        generate_matrix(cublas, cusolver, gen, m, n, log10KA, output_folder);
+        generate_matrix(cublas,
+            cusolver,
+            gen,
+            m,
+            n,
+            log10KA,
+            output_folder
+        );
     }
     CURAND_CHECK(curandDestroyGenerator(gen));
     CUSOLVER_CHECK(cusolverDnDestroy(cusolver));
