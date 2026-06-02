@@ -1,26 +1,28 @@
 /**
- * Table Benchmark: Generate square matrix with condition 10^8 and benchmark
+ * Table Benchmark with Power Measurement Support (FP8 Backend)
  * 
- * Outputs a table row with:
- * - Matrix size
- * - Native GEMM performance (TFLOPS)
- * - Ozaki II (12 moduli): Performance (TFLOPS) and Accuracy (relative error)
- * - Ozaki II (16 moduli): Performance (TFLOPS) and Accuracy (relative error)
+ * Uses FP8 Tensor Cores for Ozaki-II emulation via hipBLASLt.
+ * Note: FP8 backend requires gemmLt with hipBLASLt handle, not regular gemm.
+ * Outputs precise timestamps for GEMM phases to enable power/energy measurement.
+ * 
+ * Timestamp markers output to stderr:
+ *   GEMM_PHASE_START <phase_name> <size> <unix_timestamp_microseconds>
+ *   GEMM_PHASE_END <phase_name> <size> <unix_timestamp_microseconds>
  * 
  * Usage:
- *   ./table_benchmark <size>
- *   ./table_benchmark <size1> <size2> <size3> ...
+ *   ./table_benchmark_power_fp8 <size>
+ *   ./table_benchmark_power_fp8 <size1> <size2> <size3> ...
  */
 
 #include <hip/hip_runtime.h>
 #include <hipblas/hipblas.h>
+#include <hipblaslt/hipblaslt.h>
 #include <rocblas/rocblas.h>
 #include <rocsolver/rocsolver.h>
 #include <hiprand/hiprand.h>
 #include "gemmul8.hpp"
 #include <cstdlib>
 
-// Enable GEMMUL8_PROFILE support
 namespace oz2 { bool g_profiling_enabled = false; }
 
 #include <iostream>
@@ -28,6 +30,7 @@ namespace oz2 { bool g_profiling_enabled = false; }
 #include <vector>
 #include <cmath>
 #include <chrono>
+#include <sys/time.h>
 
 #define HIP_CHECK(call) do { \
     hipError_t err = call; \
@@ -41,6 +44,14 @@ namespace oz2 { bool g_profiling_enabled = false; }
     hipblasStatus_t status = call; \
     if (status != HIPBLAS_STATUS_SUCCESS) { \
         std::cerr << "hipBLAS error: " << status << std::endl; \
+        exit(1); \
+    } \
+} while(0)
+
+#define HIPBLASLT_CHECK(call) do { \
+    hipblasStatus_t status = call; \
+    if (status != HIPBLAS_STATUS_SUCCESS) { \
+        std::cerr << "hipBLASLt error: " << status << std::endl; \
         exit(1); \
     } \
 } while(0)
@@ -63,9 +74,26 @@ namespace oz2 { bool g_profiling_enabled = false; }
 
 static const int NUM_WARMUP = 10;
 static const int NUM_ITERATIONS = 50;
-static const int LOG10_COND = 8;  // Condition number 10^8
+static const int LOG10_COND = 8;
 
-// Kernels for matrix generation
+static int64_t get_timestamp_us() {
+    struct timeval tv;
+    gettimeofday(&tv, nullptr);
+    return (int64_t)tv.tv_sec * 1000000 + tv.tv_usec;
+}
+
+static void emit_phase_start(const char* phase, size_t size) {
+    HIP_CHECK(hipDeviceSynchronize());
+    int64_t ts = get_timestamp_us();
+    std::cerr << "GEMM_PHASE_START " << phase << " " << size << " " << ts << std::endl;
+}
+
+static void emit_phase_end(const char* phase, size_t size) {
+    HIP_CHECK(hipDeviceSynchronize());
+    int64_t ts = get_timestamp_us();
+    std::cerr << "GEMM_PHASE_END " << phase << " " << size << " " << ts << std::endl;
+}
+
 __global__ void zero_matrix_kernel(double* A, size_t size) {
     size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx < size) A[idx] = 0.0;
@@ -96,18 +124,15 @@ void generate_conditioned_matrix(rocblas_handle rb_handle, hiprandGenerator_t ge
     HIP_CHECK(hipMalloc(&d_tau, n * sizeof(double)));
     HIP_CHECK(hipMalloc(&d_sv, n * sizeof(double)));
     
-    // Generate random U and V
     HIPRAND_CHECK(hiprandGenerateNormalDouble(gen, d_U, size, 0.0, 1.0));
     HIPRAND_CHECK(hiprandGenerateNormalDouble(gen, d_V, size, 0.0, 1.0));
     
-    // QR decomposition to get orthogonal matrices
     rocsolver_dgeqrf(rb_handle, n, n, d_U, n, d_tau);
     rocsolver_dorgqr(rb_handle, n, n, n, d_U, n, d_tau);
     
     rocsolver_dgeqrf(rb_handle, n, n, d_V, n, d_tau);
     rocsolver_dorgqr(rb_handle, n, n, n, d_V, n, d_tau);
     
-    // Zero S and set diagonal
     int block_size = 256;
     size_t num_blocks = (size + block_size - 1) / block_size;
     hipLaunchKernelGGL(zero_matrix_kernel, dim3(num_blocks), dim3(block_size), 0, 0, d_S, size);
@@ -119,7 +144,6 @@ void generate_conditioned_matrix(rocblas_handle rb_handle, hiprandGenerator_t ge
                        0, 0, d_S, n, n, d_sv);
     HIP_CHECK(hipDeviceSynchronize());
     
-    // A = U * S * V'
     double alpha = 1.0, beta = 0.0;
     ROCBLAS_CHECK(rocblas_dgemm(rb_handle, rocblas_operation_none, rocblas_operation_none,
                                 n, n, n, &alpha, d_U, n, d_S, n, &beta, d_temp, n));
@@ -159,37 +183,38 @@ BenchmarkResult run_benchmark(size_t n) {
     size_t size = n * n;
     size_t bytes = size * sizeof(double);
     
-    // Initialize handles
     rocblas_handle rb_handle;
     hipblasHandle_t hb_handle;
+    hipblasLtHandle_t hblt_handle;  // hipBLASLt handle for FP8
     hiprandGenerator_t gen;
     
     ROCBLAS_CHECK(rocblas_create_handle(&rb_handle));
     HIPBLAS_CHECK(hipblasCreate(&hb_handle));
+    HIPBLASLT_CHECK(hipblasLtCreate(&hblt_handle));
     HIPRAND_CHECK(hiprandCreateGenerator(&gen, HIPRAND_RNG_PSEUDO_DEFAULT));
     HIPRAND_CHECK(hiprandSetPseudoRandomGeneratorSeed(gen, 12345ULL));
     
-    // Allocate device memory
     double *d_A, *d_C_native, *d_C_ozaki;
     HIP_CHECK(hipMalloc(&d_A, bytes));
     HIP_CHECK(hipMalloc(&d_C_native, bytes));
     HIP_CHECK(hipMalloc(&d_C_ozaki, bytes));
     
-    // Generate matrix with condition number 10^8
     std::cerr << "  Generating " << n << "x" << n << " matrix (cond=10^" << LOG10_COND << ")..." << std::flush;
     generate_conditioned_matrix(rb_handle, gen, n, LOG10_COND, d_A);
     std::cerr << " done" << std::endl;
     
     double alpha = 1.0, beta = 0.0;
     
-    // Native GEMM benchmark (C = A * A)
+    // === Native GEMM benchmark ===
     std::cerr << "  Benchmarking native GEMM..." << std::flush;
+    
     for (int i = 0; i < NUM_WARMUP; i++) {
         HIPBLAS_CHECK(hipblasDgemm(hb_handle, HIPBLAS_OP_N, HIPBLAS_OP_N,
                                    n, n, n, &alpha, d_A, n, d_A, n, &beta, d_C_native, n));
     }
     HIP_CHECK(hipDeviceSynchronize());
     
+    emit_phase_start("native_gemm", n);
     auto start = std::chrono::high_resolution_clock::now();
     for (int i = 0; i < NUM_ITERATIONS; i++) {
         HIPBLAS_CHECK(hipblasDgemm(hb_handle, HIPBLAS_OP_N, HIPBLAS_OP_N,
@@ -197,61 +222,82 @@ BenchmarkResult run_benchmark(size_t n) {
     }
     HIP_CHECK(hipDeviceSynchronize());
     auto end = std::chrono::high_resolution_clock::now();
+    emit_phase_end("native_gemm", n);
     
     double native_time = std::chrono::duration<double>(end - start).count() / NUM_ITERATIONS;
     result.native_tflops = (2.0 * n * n * n) / (native_time * 1e12);
     std::cerr << " " << result.native_tflops << " TFLOPS" << std::endl;
     
-    // Copy native result to host for comparison
     std::vector<double> h_C_native(size), h_C_ozaki(size);
     HIP_CHECK(hipMemcpy(h_C_native.data(), d_C_native, bytes, hipMemcpyDeviceToHost));
     
-    // Ozaki-II benchmarks
-    size_t worksize = gemmul8::workSize(n, n, n, 16);
+    // Ozaki-II FP8 workspace (using gemmLt)
+    size_t worksize = gemmul8::workSize<false, gemmul8::Backend::FP8>(n, n, n, 16);
     void* d_work;
     HIP_CHECK(hipMalloc(&d_work, worksize));
     
-    for (int moduli : {12, 16}) {
-        std::cerr << "  Benchmarking Ozaki-II (" << moduli << " moduli)..." << std::flush;
-        
-        for (int i = 0; i < NUM_WARMUP; i++) {
-            gemmul8::gemm<double>(hb_handle, HIPBLAS_OP_N, HIPBLAS_OP_N,
-                                  n, n, n, &alpha, d_A, n, d_A, n, &beta, d_C_ozaki, n,
-                                  moduli, false, d_work);
-        }
-        HIP_CHECK(hipDeviceSynchronize());
-        
-        start = std::chrono::high_resolution_clock::now();
-        for (int i = 0; i < NUM_ITERATIONS; i++) {
-            gemmul8::gemm<double>(hb_handle, HIPBLAS_OP_N, HIPBLAS_OP_N,
-                                  n, n, n, &alpha, d_A, n, d_A, n, &beta, d_C_ozaki, n,
-                                  moduli, false, d_work);
-        }
-        HIP_CHECK(hipDeviceSynchronize());
-        end = std::chrono::high_resolution_clock::now();
-        
-        double ozaki_time = std::chrono::duration<double>(end - start).count() / NUM_ITERATIONS;
-        double tflops = (2.0 * n * n * n) / (ozaki_time * 1e12);
-        
-        HIP_CHECK(hipMemcpy(h_C_ozaki.data(), d_C_ozaki, bytes, hipMemcpyDeviceToHost));
-        double error = compute_frobenius_rel_error(h_C_native.data(), h_C_ozaki.data(), size);
-        
-        if (moduli == 12) {
-            result.ozaki12_tflops = tflops;
-            result.ozaki12_error = error;
-        } else {
-            result.ozaki16_tflops = tflops;
-            result.ozaki16_error = error;
-        }
-        std::cerr << " " << tflops << " TFLOPS, error=" << error << std::endl;
-    }
+    // === Ozaki-II FP8 12 moduli benchmark ===
+    std::cerr << "  Benchmarking Ozaki-II FP8 (12 moduli)..." << std::flush;
     
-    // Cleanup
+    for (int i = 0; i < NUM_WARMUP; i++) {
+        gemmul8::gemmLt<double, gemmul8::Backend::FP8>(hblt_handle, HIPBLAS_OP_N, HIPBLAS_OP_N,
+                              n, n, n, &alpha, d_A, n, d_A, n, &beta, d_C_ozaki, n,
+                              12, false, d_work);
+    }
+    HIP_CHECK(hipDeviceSynchronize());
+    
+    emit_phase_start("ozaki12_fp8", n);
+    start = std::chrono::high_resolution_clock::now();
+    for (int i = 0; i < NUM_ITERATIONS; i++) {
+        gemmul8::gemmLt<double, gemmul8::Backend::FP8>(hblt_handle, HIPBLAS_OP_N, HIPBLAS_OP_N,
+                              n, n, n, &alpha, d_A, n, d_A, n, &beta, d_C_ozaki, n,
+                              12, false, d_work);
+    }
+    HIP_CHECK(hipDeviceSynchronize());
+    end = std::chrono::high_resolution_clock::now();
+    emit_phase_end("ozaki12_fp8", n);
+    
+    double ozaki12_time = std::chrono::duration<double>(end - start).count() / NUM_ITERATIONS;
+    result.ozaki12_tflops = (2.0 * n * n * n) / (ozaki12_time * 1e12);
+    
+    HIP_CHECK(hipMemcpy(h_C_ozaki.data(), d_C_ozaki, bytes, hipMemcpyDeviceToHost));
+    result.ozaki12_error = compute_frobenius_rel_error(h_C_native.data(), h_C_ozaki.data(), size);
+    std::cerr << " " << result.ozaki12_tflops << " TFLOPS, error=" << result.ozaki12_error << std::endl;
+    
+    // === Ozaki-II FP8 16 moduli benchmark ===
+    std::cerr << "  Benchmarking Ozaki-II FP8 (16 moduli)..." << std::flush;
+    
+    for (int i = 0; i < NUM_WARMUP; i++) {
+        gemmul8::gemmLt<double, gemmul8::Backend::FP8>(hblt_handle, HIPBLAS_OP_N, HIPBLAS_OP_N,
+                              n, n, n, &alpha, d_A, n, d_A, n, &beta, d_C_ozaki, n,
+                              16, false, d_work);
+    }
+    HIP_CHECK(hipDeviceSynchronize());
+    
+    emit_phase_start("ozaki16_fp8", n);
+    start = std::chrono::high_resolution_clock::now();
+    for (int i = 0; i < NUM_ITERATIONS; i++) {
+        gemmul8::gemmLt<double, gemmul8::Backend::FP8>(hblt_handle, HIPBLAS_OP_N, HIPBLAS_OP_N,
+                              n, n, n, &alpha, d_A, n, d_A, n, &beta, d_C_ozaki, n,
+                              16, false, d_work);
+    }
+    HIP_CHECK(hipDeviceSynchronize());
+    end = std::chrono::high_resolution_clock::now();
+    emit_phase_end("ozaki16_fp8", n);
+    
+    double ozaki16_time = std::chrono::duration<double>(end - start).count() / NUM_ITERATIONS;
+    result.ozaki16_tflops = (2.0 * n * n * n) / (ozaki16_time * 1e12);
+    
+    HIP_CHECK(hipMemcpy(h_C_ozaki.data(), d_C_ozaki, bytes, hipMemcpyDeviceToHost));
+    result.ozaki16_error = compute_frobenius_rel_error(h_C_native.data(), h_C_ozaki.data(), size);
+    std::cerr << " " << result.ozaki16_tflops << " TFLOPS, error=" << result.ozaki16_error << std::endl;
+    
     HIP_CHECK(hipFree(d_work));
     HIP_CHECK(hipFree(d_A));
     HIP_CHECK(hipFree(d_C_native));
     HIP_CHECK(hipFree(d_C_ozaki));
     HIPRAND_CHECK(hiprandDestroyGenerator(gen));
+    HIPBLASLT_CHECK(hipblasLtDestroy(hblt_handle));
     HIPBLAS_CHECK(hipblasDestroy(hb_handle));
     ROCBLAS_CHECK(rocblas_destroy_handle(rb_handle));
     
@@ -260,17 +306,16 @@ BenchmarkResult run_benchmark(size_t n) {
 
 void print_table_header() {
     std::cout << "+-------------+----------+----------+----------+-------------+-----------------------------+-----------------------------+" << std::endl;
-    std::cout << "| Matrix Size | Matrices | WS 12spl | WS 16spl | Native GEMM | Ozaki II (12 splits)        | Ozaki II (16 splits)        |" << std::endl;
+    std::cout << "| Matrix Size | Matrices | WS 12spl | WS 16spl | Native GEMM | Ozaki II FP8 (12 splits)    | Ozaki II FP8 (16 splits)    |" << std::endl;
     std::cout << "+-------------+----------+----------+----------+-------------+-----------------------------+-----------------------------+" << std::endl;
     std::cout << "|             |   (MB)   |   (MB)   |   (MB)   | Performance | Performance | Accuracy      | Performance | Accuracy      |" << std::endl;
     std::cout << "+-------------+----------+----------+----------+-------------+-------------+---------------+-------------+---------------+" << std::endl;
 }
 
 void print_table_row(size_t n, const BenchmarkResult& r) {
-    // Calculate memory requirements
-    size_t matrix_mem = 2 * n * n * sizeof(double);  // A and C matrices
-    size_t ozaki_ws_12 = gemmul8::workSize(n, n, n, 12);
-    size_t ozaki_ws_16 = gemmul8::workSize(n, n, n, 16);
+    size_t matrix_mem = 2 * n * n * sizeof(double);
+    size_t ozaki_ws_12 = gemmul8::workSize<false, gemmul8::Backend::FP8>(n, n, n, 12);
+    size_t ozaki_ws_16 = gemmul8::workSize<false, gemmul8::Backend::FP8>(n, n, n, 16);
     double matrix_mb = matrix_mem / (1024.0 * 1024.0);
     double ozaki_mb_12 = ozaki_ws_12 / (1024.0 * 1024.0);
     double ozaki_mb_16 = ozaki_ws_16 / (1024.0 * 1024.0);
@@ -294,7 +339,7 @@ void print_table_footer() {
 void print_summary_table(const std::vector<size_t>& sizes, const std::vector<BenchmarkResult>& results) {
     std::cout << std::endl;
     std::cout << "======================================================================================================================" << std::endl;
-    std::cout << "                                                  SUMMARY TABLE" << std::endl;
+    std::cout << "                                           SUMMARY TABLE (FP8 Backend)" << std::endl;
     std::cout << "                                             Condition Number: 10^" << LOG10_COND << std::endl;
     std::cout << "======================================================================================================================" << std::endl;
     std::cout << std::endl;
@@ -308,8 +353,8 @@ void print_summary_table(const std::vector<size_t>& sizes, const std::vector<Ben
     std::cout << std::endl;
     std::cout << "Legend:" << std::endl;
     std::cout << "  - Matrices: Memory for A and C matrices (A*A computation)" << std::endl;
-    std::cout << "  - WS 12spl: Ozaki-II workspace memory for 12 splits" << std::endl;
-    std::cout << "  - WS 16spl: Ozaki-II workspace memory for 16 splits" << std::endl;
+    std::cout << "  - WS 12spl: Ozaki-II FP8 workspace memory for 12 splits" << std::endl;
+    std::cout << "  - WS 16spl: Ozaki-II FP8 workspace memory for 16 splits" << std::endl;
     std::cout << "  - Performance in TFLOPS (TF)" << std::endl;
     std::cout << "  - Accuracy: Relative Frobenius error vs native FP64" << std::endl;
     std::cout << "======================================================================================================================" << std::endl;
@@ -322,7 +367,6 @@ int main(int argc, char* argv[]) {
         return 1;
     }
     
-    // Check for GEMMUL8_PROFILE environment variable
     const char* prof = getenv("GEMMUL8_PROFILE");
     if (prof && std::string(prof) == "1") {
         oz2::g_profiling_enabled = true;
@@ -334,12 +378,12 @@ int main(int argc, char* argv[]) {
         sizes.push_back(std::stoull(argv[i]));
     }
     
+    std::cerr << "Backend: FP8 Tensor Cores (via hipBLASLt)" << std::endl;
     std::cerr << "Condition number: 10^" << LOG10_COND << std::endl;
     std::cerr << "Matrix sizes: ";
     for (size_t s : sizes) std::cerr << s << " ";
     std::cerr << std::endl << std::endl;
     
-    // Collect all results
     std::vector<BenchmarkResult> results;
     
     for (size_t n : sizes) {
@@ -349,7 +393,6 @@ int main(int argc, char* argv[]) {
         std::cerr << std::endl;
     }
     
-    // Print summary table at the end
     print_summary_table(sizes, results);
     
     return 0;
