@@ -1,0 +1,125 @@
+{
+  "power_profile": "/home/kswirydo/rocEMU/power_profile_20260602_112921.txt",
+  "benchmark_log": "/home/kswirydo/rocEMU/benchmark_log_20260602_112921.txt",
+  "device_index": 0,
+  "power_caps_w": [
+    1400,
+    1400,
+    1400,
+    1400,
+    1400,
+    1400,
+    1400,
+    1400
+  ],
+  "phases": [
+    {
+      "phase": "native_gemm",
+      "size": 4096,
+      "start_us": 1780417763326508,
+      "end_us": 1780417763423665,
+      "avg_power_w": 251.0,
+      "energy_j": 22.721774999999997,
+      "duration_s": 0.090525,
+      "n_samples": 10
+    },
+    {
+      "phase": "ozaki12",
+      "size": 4096,
+      "start_us": 1780417763859882,
+      "end_us": 1780417763953138,
+      "avg_power_w": 252.0,
+      "energy_j": 20.278692,
+      "duration_s": 0.080471,
+      "n_samples": 9
+    },
+    {
+      "phase": "ozaki16",
+      "size": 4096,
+      "start_us": 1780417763988072,
+      "end_us": 1780417764109767,
+      "avg_power_w": 251.58333333333334,
+      "energy_j": 27.818893,
+      "duration_s": 0.110592,
+      "n_samples": 12
+    },
+    {
+      "phase": "native_gemm",
+      "size": 8192,
+      "start_us": 1780417765078732,
+      "end_us": 1780417765862537,
+      "avg_power_w": 251.0,
+      "energy_j": 194.387201,
+      "duration_s": 0.774451,
+      "n_samples": 78
+    },
+    {
+      "phase": "ozaki12",
+      "size": 8192,
+      "start_us": 1780417766147184,
+      "end_us": 1780417766584847,
+      "avg_power_w": 250.95348837209303,
+      "energy_j": 105.98646799999999,
+      "duration_s": 0.422337,
+      "n_samples": 43
+    },
+    {
+      "phase": "ozaki16",
+      "size": 8192,
+      "start_us": 1780417766738201,
+      "end_us": 1780417767312093,
+      "avg_power_w": 251.0,
+      "energy_j": 141.351401,
+      "duration_s": 0.563153,
+      "n_samples": 57
+    }
+  ],
+  "summary": {
+    "total_gemm_duration_s": 2.0415289999999997,
+    "total_gemm_energy_j": 512.54443,
+    "avg_gemm_power_w": 251.05909835226447,
+    "energy_kwh": 0.00014237345277777778
+  },
+  "by_phase_type": {
+    "native_gemm": {
+      "energy_j": 217.108976,
+      "duration_s": 0.864976,
+      "sizes": [
+        4096,
+        8192
+      ],
+      "avg_power_w": 251.00000000000003
+    },
+    "ozaki12": {
+      "energy_j": 126.26515999999998,
+      "duration_s": 0.502808,
+      "sizes": [
+        4096,
+        8192
+      ],
+      "avg_power_w": 251.12002991201408
+    },
+    "ozaki16": {
+      "energy_j": 169.170294,
+      "duration_s": 0.673745,
+      "sizes": [
+        4096,
+        8192
+      ],
+      "avg_power_w": 251.08949825230616
+    }
+  },
+  "native_vs_emulated": {
+    "native_gemm": {
+      "energy_j": 217.108976,
+      "duration_s": 0.864976,
+      "avg_power_w": 251.00000000000003
+    },
+    "emulated_gemm": {
+      "energy_j": 295.435454,
+      "duration_s": 1.1765530000000002,
+      "avg_power_w": 251.102546166641
+    },
+    "energy_ratio": 1.3607703349860578
+  }
+}

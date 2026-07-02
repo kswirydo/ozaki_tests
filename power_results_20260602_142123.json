@@ -1,0 +1,517 @@
+{
+  "power_profile": "/home/kswirydo/rocEMU/power_profile_20260602_142123.txt",
+  "benchmark_log": "/home/kswirydo/rocEMU/benchmark_log_20260602_142123.txt",
+  "device_index": 0,
+  "power_caps_w": [
+    1400,
+    1400,
+    1400,
+    1400,
+    1400,
+    1400,
+    1400,
+    1400
+  ],
+  "phases": [
+    {
+      "phase": "native_gemm",
+      "size": 384,
+      "start_us": 1780428085214972,
+      "end_us": 1780428085215733,
+      "avg_power_w": 252.0,
+      "energy_j": 0.191772,
+      "duration_s": 0.000761,
+      "n_samples": 3
+    },
+    {
+      "phase": "ozaki12",
+      "size": 384,
+      "start_us": 1780428085527381,
+      "end_us": 1780428085552577,
+      "avg_power_w": 253.0,
+      "energy_j": 6.374588,
+      "duration_s": 0.025196,
+      "n_samples": 75
+    },
+    {
+      "phase": "ozaki16",
+      "size": 384,
+      "start_us": 1780428085559350,
+      "end_us": 1780428085591992,
+      "avg_power_w": 252.76530612244898,
+      "energy_j": 8.251100000000001,
+      "duration_s": 0.032642,
+      "n_samples": 98
+    },
+    {
+      "phase": "native_gemm",
+      "size": 512,
+      "start_us": 1780428085616333,
+      "end_us": 1780428085616962,
+      "avg_power_w": 254.0,
+      "energy_j": 0.15976600000000002,
+      "duration_s": 0.000629,
+      "n_samples": 2
+    },
+    {
+      "phase": "ozaki12",
+      "size": 512,
+      "start_us": 1780428085622487,
+      "end_us": 1780428085647655,
+      "avg_power_w": 253.0958904109589,
+      "energy_j": 6.369687000000001,
+      "duration_s": 0.025168,
+      "n_samples": 73
+    },
+    {
+      "phase": "ozaki16",
+      "size": 512,
+      "start_us": 1780428085654435,
+      "end_us": 1780428085687028,
+      "avg_power_w": 253.0,
+      "energy_j": 8.246029000000002,
+      "duration_s": 0.032593,
+      "n_samples": 98
+    },
+    {
+      "phase": "native_gemm",
+      "size": 1024,
+      "start_us": 1780428085734796,
+      "end_us": 1780428085736963,
+      "avg_power_w": 253.0,
+      "energy_j": 0.5482509999999999,
+      "duration_s": 0.002167,
+      "n_samples": 7
+    },
+    {
+      "phase": "ozaki12",
+      "size": 1024,
+      "start_us": 1780428085743338,
+      "end_us": 1780428085771129,
+      "avg_power_w": 253.18823529411765,
+      "energy_j": 7.036451499999999,
+      "duration_s": 0.027791,
+      "n_samples": 85
+    },
+    {
+      "phase": "ozaki16",
+      "size": 1024,
+      "start_us": 1780428085779018,
+      "end_us": 1780428085814636,
+      "avg_power_w": 251.64761904761906,
+      "energy_j": 8.963647499999999,
+      "duration_s": 0.035618,
+      "n_samples": 105
+    },
+    {
+      "phase": "native_gemm",
+      "size": 2048,
+      "start_us": 1780428085919658,
+      "end_us": 1780428085934091,
+      "avg_power_w": 253.0,
+      "energy_j": 3.6515489999999997,
+      "duration_s": 0.014433,
+      "n_samples": 43
+    },
+    {
+      "phase": "ozaki12",
+      "size": 2048,
+      "start_us": 1780428085955246,
+      "end_us": 1780428085994200,
+      "avg_power_w": 252.86324786324786,
+      "energy_j": 9.849981500000002,
+      "duration_s": 0.038954,
+      "n_samples": 117
+    },
+    {
+      "phase": "ozaki16",
+      "size": 2048,
+      "start_us": 1780428086007083,
+      "end_us": 1780428086057734,
+      "avg_power_w": 252.4078947368421,
+      "energy_j": 12.784112,
+      "duration_s": 0.050651,
+      "n_samples": 152
+    },
+    {
+      "phase": "native_gemm",
+      "size": 4096,
+      "start_us": 1780428086335126,
+      "end_us": 1780428086430301,
+      "avg_power_w": 252.16602316602317,
+      "energy_j": 24.000372999999996,
+      "duration_s": 0.095175,
+      "n_samples": 259
+    },
+    {
+      "phase": "ozaki12",
+      "size": 4096,
+      "start_us": 1780428086498585,
+      "end_us": 1780428086592626,
+      "avg_power_w": 252.58846153846153,
+      "energy_j": 23.754641,
+      "duration_s": 0.094041,
+      "n_samples": 260
+    },
+    {
+      "phase": "ozaki16",
+      "size": 4096,
+      "start_us": 1780428086627128,
+      "end_us": 1780428086750652,
+      "avg_power_w": 252.50295857988166,
+      "energy_j": 31.1902785,
+      "duration_s": 0.123524,
+      "n_samples": 338
+    },
+    {
+      "phase": "native_gemm",
+      "size": 8192,
+      "start_us": 1780428090995945,
+      "end_us": 1780428091787331,
+      "avg_power_w": 252.6642796967144,
+      "energy_j": 199.955043,
+      "duration_s": 0.791386,
+      "n_samples": 2374
+    },
+    {
+      "phase": "ozaki12",
+      "size": 8192,
+      "start_us": 1780428092070633,
+      "end_us": 1780428092508937,
+      "avg_power_w": 252.90722433460076,
+      "energy_j": 110.8499425,
+      "duration_s": 0.438304,
+      "n_samples": 1315
+    },
+    {
+      "phase": "ozaki16",
+      "size": 8192,
+      "start_us": 1780428092662896,
+      "end_us": 1780428093237975,
+      "avg_power_w": 253.26102088167053,
+      "energy_j": 145.645012,
+      "duration_s": 0.575079,
+      "n_samples": 1724
+    },
+    {
+      "phase": "native_gemm",
+      "size": 16384,
+      "start_us": 1780428098597591,
+      "end_us": 1780428104855951,
+      "avg_power_w": 241.07332601536774,
+      "energy_j": 1508.7397995000001,
+      "duration_s": 6.25836,
+      "n_samples": 18220
+    },
+    {
+      "phase": "ozaki12",
+      "size": 16384,
+      "start_us": 1780428106191254,
+      "end_us": 1780428108906329,
+      "avg_power_w": 241.297597555895,
+      "energy_j": 655.1752789999999,
+      "duration_s": 2.715075,
+      "n_samples": 7201
+    },
+    {
+      "phase": "ozaki16",
+      "size": 16384,
+      "start_us": 1780428109769556,
+      "end_us": 1780428113336265,
+      "avg_power_w": 241.34806562193927,
+      "energy_j": 860.812695,
+      "duration_s": 3.566709,
+      "n_samples": 8168
+    },
+    {
+      "phase": "native_gemm",
+      "size": 32768,
+      "start_us": 1780428144772090,
+      "end_us": 1780428197341816,
+      "avg_power_w": 242.4175455491527,
+      "energy_j": 12743.6652645,
+      "duration_s": 52.569726,
+      "n_samples": 128762
+    },
+    {
+      "phase": "ozaki12",
+      "size": 32768,
+      "start_us": 1780428204195947,
+      "end_us": 1780428223372173,
+      "avg_power_w": 241.55680806281876,
+      "energy_j": 4632.0291265,
+      "duration_s": 19.176226,
+      "n_samples": 49412
+    },
+    {
+      "phase": "ozaki16",
+      "size": 32768,
+      "start_us": 1780428229211374,
+      "end_us": 1780428254305592,
+      "avg_power_w": 241.39579848105762,
+      "energy_j": 6057.746524499999,
+      "duration_s": 25.094218,
+      "n_samples": 67547
+    },
+    {
+      "phase": "native_gemm",
+      "size": 40960,
+      "start_us": 1780428312586512,
+      "end_us": 1780428419245681,
+      "avg_power_w": 242.83841644963877,
+      "energy_j": 25900.3431095,
+      "duration_s": 106.659169,
+      "n_samples": 278766
+    },
+    {
+      "phase": "ozaki12",
+      "size": 40960,
+      "start_us": 1780428431337767,
+      "end_us": 1780428467765577,
+      "avg_power_w": 241.53662091711885,
+      "energy_j": 8798.692518,
+      "duration_s": 36.42781,
+      "n_samples": 93990
+    },
+    {
+      "phase": "ozaki16",
+      "size": 40960,
+      "start_us": 1780428478720450,
+      "end_us": 1780428526366947,
+      "avg_power_w": 241.53186109100963,
+      "energy_j": 11508.107675,
+      "duration_s": 47.646497,
+      "n_samples": 122987
+    }
+  ],
+  "by_phase_type": {
+    "native_gemm": {
+      "energy_j": 40381.254927500006,
+      "duration_s": 166.391806,
+      "sizes": [
+        384,
+        512,
+        1024,
+        2048,
+        4096,
+        8192,
+        16384,
+        32768,
+        40960
+      ],
+      "avg_power_w": 242.68776148448083
+    },
+    "ozaki12": {
+      "energy_j": 14250.132215,
+      "duration_s": 58.968565,
+      "sizes": [
+        384,
+        512,
+        1024,
+        2048,
+        4096,
+        8192,
+        16384,
+        32768,
+        40960
+      ],
+      "avg_power_w": 241.65641838155634
+    },
+    "ozaki16": {
+      "energy_j": 18641.7470735,
+      "duration_s": 77.157531,
+      "sizes": [
+        384,
+        512,
+        1024,
+        2048,
+        4096,
+        8192,
+        16384,
+        32768,
+        40960
+      ],
+      "avg_power_w": 241.6063193299951
+    }
+  },
+  "by_size": {
+    "384": {
+      "native": {
+        "energy_j": 0.191772,
+        "avg_power_w": 252.0,
+        "duration_s": 0.000761
+      },
+      "ozaki12": {
+        "energy_j": 6.374588,
+        "avg_power_w": 253.0,
+        "duration_s": 0.025196
+      },
+      "ozaki16": {
+        "energy_j": 8.251100000000001,
+        "avg_power_w": 252.76530612244898,
+        "duration_s": 0.032642
+      },
+      "ratio_oz12_native": 33.24045220365851,
+      "ratio_oz16_native": 43.0255720334564
+    },
+    "512": {
+      "native": {
+        "energy_j": 0.15976600000000002,
+        "avg_power_w": 254.0,
+        "duration_s": 0.000629
+      },
+      "ozaki12": {
+        "energy_j": 6.369687000000001,
+        "avg_power_w": 253.0958904109589,
+        "duration_s": 0.025168
+      },
+      "ozaki16": {
+        "energy_j": 8.246029000000002,
+        "avg_power_w": 253.0,
+        "duration_s": 0.032593
+      },
+      "ratio_oz12_native": 39.86885194597098,
+      "ratio_oz16_native": 51.61316550455041
+    },
+    "1024": {
+      "native": {
+        "energy_j": 0.5482509999999999,
+        "avg_power_w": 253.0,
+        "duration_s": 0.002167
+      },
+      "ozaki12": {
+        "energy_j": 7.036451499999999,
+        "avg_power_w": 253.18823529411765,
+        "duration_s": 0.027791
+      },
+      "ozaki16": {
+        "energy_j": 8.963647499999999,
+        "avg_power_w": 251.64761904761906,
+        "duration_s": 0.035618
+      },
+      "ratio_oz12_native": 12.834361451233104,
+      "ratio_oz16_native": 16.349532422193484
+    },
+    "2048": {
+      "native": {
+        "energy_j": 3.6515489999999997,
+        "avg_power_w": 253.0,
+        "duration_s": 0.014433
+      },
+      "ozaki12": {
+        "energy_j": 9.849981500000002,
+        "avg_power_w": 252.86324786324786,
+        "duration_s": 0.038954
+      },
+      "ozaki16": {
+        "energy_j": 12.784112,
+        "avg_power_w": 252.4078947368421,
+        "duration_s": 0.050651
+      },
+      "ratio_oz12_native": 2.697480302195042,
+      "ratio_oz16_native": 3.5010106669799588
+    },
+    "4096": {
+      "native": {
+        "energy_j": 24.000372999999996,
+        "avg_power_w": 252.16602316602317,
+        "duration_s": 0.095175
+      },
+      "ozaki12": {
+        "energy_j": 23.754641,
+        "avg_power_w": 252.58846153846153,
+        "duration_s": 0.094041
+      },
+      "ozaki16": {
+        "energy_j": 31.1902785,
+        "avg_power_w": 252.50295857988166,
+        "duration_s": 0.123524
+      },
+      "ratio_oz12_native": 0.9897613257927285,
+      "ratio_oz16_native": 1.2995747399425837
+    },
+    "8192": {
+      "native": {
+        "energy_j": 199.955043,
+        "avg_power_w": 252.6642796967144,
+        "duration_s": 0.791386
+      },
+      "ozaki12": {
+        "energy_j": 110.8499425,
+        "avg_power_w": 252.90722433460076,
+        "duration_s": 0.438304
+      },
+      "ozaki16": {
+        "energy_j": 145.645012,
+        "avg_power_w": 253.26102088167053,
+        "duration_s": 0.575079
+      },
+      "ratio_oz12_native": 0.5543743275332146,
+      "ratio_oz16_native": 0.7283887908743568
+    },
+    "16384": {
+      "native": {
+        "energy_j": 1508.7397995000001,
+        "avg_power_w": 241.07332601536774,
+        "duration_s": 6.25836
+      },
+      "ozaki12": {
+        "energy_j": 655.1752789999999,
+        "avg_power_w": 241.297597555895,
+        "duration_s": 2.715075
+      },
+      "ozaki16": {
+        "energy_j": 860.812695,
+        "avg_power_w": 241.34806562193927,
+        "duration_s": 3.566709
+      },
+      "ratio_oz12_native": 0.43425332798745453,
+      "ratio_oz16_native": 0.5705507969533747
+    },
+    "32768": {
+      "native": {
+        "energy_j": 12743.6652645,
+        "avg_power_w": 242.4175455491527,
+        "duration_s": 52.569726
+      },
+      "ozaki12": {
+        "energy_j": 4632.0291265,
+        "avg_power_w": 241.55680806281876,
+        "duration_s": 19.176226
+      },
+      "ozaki16": {
+        "energy_j": 6057.746524499999,
+        "avg_power_w": 241.39579848105762,
+        "duration_s": 25.094218
+      },
+      "ratio_oz12_native": 0.3634769927144456,
+      "ratio_oz16_native": 0.4753535500791166
+    },
+    "40960": {
+      "native": {
+        "energy_j": 25900.3431095,
+        "avg_power_w": 242.83841644963877,
+        "duration_s": 106.659169
+      },
+      "ozaki12": {
+        "energy_j": 8798.692518,
+        "avg_power_w": 241.53662091711885,
+        "duration_s": 36.42781
+      },
+      "ozaki16": {
+        "energy_j": 11508.107675,
+        "avg_power_w": 241.53186109100963,
+        "duration_s": 47.646497
+      },
+      "ratio_oz12_native": 0.33971335749497167,
+      "ratio_oz16_native": 0.4443225955095141
+    }
+  },
+  "summary": {
+    "total_native_energy_j": 40381.254927500006,
+    "total_oz12_energy_j": 14250.132215,
+    "total_oz16_energy_j": 18641.7470735,
+    "ratio_oz12_native": 0.352889781176551,
+    "ratio_oz16_native": 0.4616435796007122
+  }
+}

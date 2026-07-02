@@ -1,0 +1,56 @@
+# Compiled binaries
+matrix_generator
+gemm_benchmark
+ab_matrix_generator
+ab_gemm_benchmark
+simple_matrix_generator
+simple_gemm_benchmark
+ab_gemm_emu_compare
+single_gemm_benchmark
+inner_dim_benchmark
+outer_dim_benchmark
+table_benchmark
+table_benchmark_fp8
+table_benchmark_power
+table_benchmark_power_fp8
+gemm_vs_gemmlt_benchmark
+gemm_int8_vs_fp8_benchmark
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Matrix files
+M_cond_*.txt
+A_*.txt
+B_*.txt
+matrices_*/
+ab_matrices_*/
+my_matrices*/
+
+# Exception: keep the 4096x4096 matrices in A_B_matrices (tracked via Git LFS)
+!A_B_matrices/A_*.txt
+!A_B_matrices/B_*.txt
+
+# Test folders
+test_matrices_*/
+
+# Benchmark results
+gemm_benchmark_*.csv
+ab_gemm_benchmark_*.csv
+simple_gemm_benchmark_*.csv
+
+# Object files
+*.o
+*.obj
+
+# Editor files
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
