@@ -15,6 +15,8 @@ table_benchmark_power
 table_benchmark_power_fp8
 gemm_vs_gemmlt_benchmark
 gemm_int8_vs_fp8_benchmark
+special_zero_gemm_gradeTest1
+scaling_gemm_gradeTest2
 
 # Python cache
 __pycache__/

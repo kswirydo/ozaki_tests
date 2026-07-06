@@ -47,6 +47,8 @@ TARGET_TABLE_BENCHMARK_FP8 = table_benchmark_fp8
 TARGET_TABLE_BENCHMARK_POWER_FP8 = table_benchmark_power_fp8
 TARGET_GEMM_VS_GEMMLT_BENCHMARK = gemm_vs_gemmlt_benchmark
 TARGET_GEMM_INT8_VS_FP8_BENCHMARK = gemm_int8_vs_fp8_benchmark
+TARGET_SPECIAL_ZERO_GEMM = special_zero_gemm_gradeTest1
+TARGET_SCALING_GEMM = scaling_gemm_gradeTest2
 
 # Source files
 SRCS_GENERATOR = matrix_generator.cpp
@@ -67,6 +69,8 @@ SRCS_TABLE_BENCHMARK_FP8 = table_benchmark_fp8.cu
 SRCS_TABLE_BENCHMARK_POWER_FP8 = table_benchmark_power_fp8.cu
 SRCS_GEMM_VS_GEMMLT_BENCHMARK = gemm_vs_gemmlt_benchmark.cu
 SRCS_GEMM_INT8_VS_FP8_BENCHMARK = gemm_int8_vs_fp8_benchmark.cu
+SRCS_SPECIAL_ZERO_GEMM = special_zero_gemm_gradeTest1.cu
+SRCS_SCALING_GEMM = scaling_gemm_gradeTest2.cu
 
 # Default target: build all
 all: $(TARGET_GENERATOR) $(TARGET_AB_GENERATOR) $(TARGET_SIMPLE_GENERATOR) $(TARGET_BENCHMARK) $(TARGET_AB_BENCHMARK) $(TARGET_SIMPLE_BENCHMARK)
@@ -158,6 +162,26 @@ benchmark: $(TARGET_BENCHMARK)
 
 # Build only A/B benchmark
 ab_benchmark: $(TARGET_AB_BENCHMARK)
+
+# Special-zero experiment: FP64 vs INT8 Ozaki-II with planted zero dot products
+$(TARGET_SPECIAL_ZERO_GEMM): $(SRCS_SPECIAL_ZERO_GEMM)
+	$(HIPCC) $(CXXFLAGS) $(INCLUDES_BENCHMARK) $(SRCS_SPECIAL_ZERO_GEMM) -o $(TARGET_SPECIAL_ZERO_GEMM) $(LDFLAGS_BENCHMARK) $(LIBS_BENCHMARK) -lhipblaslt
+
+special_zero_gemm_gradeTest1: $(TARGET_SPECIAL_ZERO_GEMM)
+
+# Build and run the special-zero experiment (usage: make run_special_zero_gemm_gradeTest1 [ARGS="1024 16 12345"])
+ARGS ?=
+run_special_zero_gemm_gradeTest1: $(TARGET_SPECIAL_ZERO_GEMM)
+	LD_LIBRARY_PATH=$(GEMMUL8_PATH)/lib:$(ROCM_PATH)/lib:$$LD_LIBRARY_PATH ./$(TARGET_SPECIAL_ZERO_GEMM) $(ARGS)
+
+# Diagonal-scaling robustness test: FP64 vs FP64-scaled vs INT8-scaled 3-way compare
+$(TARGET_SCALING_GEMM): $(SRCS_SCALING_GEMM)
+	$(HIPCC) $(CXXFLAGS) $(INCLUDES_BENCHMARK) $(SRCS_SCALING_GEMM) -o $(TARGET_SCALING_GEMM) $(LDFLAGS_BENCHMARK) $(LIBS_BENCHMARK) -lhipblaslt
+
+scaling_gemm_gradeTest2: $(TARGET_SCALING_GEMM)
+
+run_scaling_gemm_gradeTest2: $(TARGET_SCALING_GEMM)
+	LD_LIBRARY_PATH=$(GEMMUL8_PATH)/lib:$(ROCM_PATH)/lib:$$LD_LIBRARY_PATH ./$(TARGET_SCALING_GEMM) $(ARGS)
 
 # Build only A/B emulation comparison
 ab_emu_compare: $(TARGET_AB_EMU_COMPARE)
