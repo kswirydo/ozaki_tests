@@ -215,14 +215,38 @@ int main(int argc, char** argv) {
     norm_emu  = std::sqrt(norm_emu);
     norm_diff = std::sqrt(norm_diff);
 
+    // Elementwise relative error: max_{i,j} |C_emu[i,j] - C_fp64[i,j]| / |C_fp64[i,j]|,
+    // where C_fp64 (the native FP64 result) is treated as the "true" result C^(2).
+    // Entries with an exactly-zero true value (e.g. the planted zeros) are skipped,
+    // since a relative error is undefined there.
+    double max_rel = 0.0;
+    size_t max_i = 0, max_j = 0;
+    size_t skipped_zero = 0;
+    for (size_t j = 0; j < M; ++j) {
+        for (size_t i = 0; i < N; ++i) {
+            size_t p = idxC(i, j, N);
+            double truth = h_C_fp64[p];
+            if (truth == 0.0) { ++skipped_zero; continue; }
+            double rel = std::fabs(h_C_emu[p] - truth) / std::fabs(truth);
+            if (rel > max_rel) { max_rel = rel; max_i = i; max_j = j; }
+        }
+    }
+
     std::cout << "------------------------------------------------------------\n";
     std::cout << "Frobenius-norm residuals\n";
     std::cout << "------------------------------------------------------------\n";
-    std::cout << std::scientific << std::setprecision(6);
-    std::cout << "  ||C_fp64||_F                                = " << norm_fp64 << "\n";
-    std::cout << "  ||C_emu ||_F                                = " << norm_emu  << "\n";
+    std::cout << std::scientific << std::setprecision(16);
+    std::cout << "  ||C_fp64||_F                                = " << std::setw(16) << norm_fp64 << "\n";
+    std::cout << "  ||C_emu ||_F                                = " << std::setw(16) << norm_emu  << "\n";
     std::cout << "  ||C_fp64 - C_emu||_F / ||C_fp64||_F         = "
-              << norm_diff / norm_fp64 << "   (elementwise, for reference)\n\n";
+              << std::setw(16) << norm_diff / norm_fp64 << "   (elementwise, for reference)\n";
+    std::cout << "  max_ij |C_emu - C_fp64| / |C_fp64|          = "
+              << std::setw(16) << max_rel << "   (elementwise relative error, at (" << max_i
+              << "," << max_j << "))\n";
+    if (skipped_zero)
+        std::cout << "      (" << skipped_zero
+                  << " entries with C_fp64 == 0 skipped in the max above)\n";
+    std::cout << "\n";
 
     // ---- Planted-zero locations -------------------------------------------
     std::cout << "------------------------------------------------------------\n";

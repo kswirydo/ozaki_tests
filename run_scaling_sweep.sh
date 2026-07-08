@@ -2,117 +2,88 @@
 #
 # run_scaling_sweep.sh
 # --------------------
-# Sweep the 4th parameter (exponent interval range) of scaling_gemm_gradeTest2
-# over 0, 2, 4, ..., 54 on fixed 1024x1024 matrices with a constant seed, and
-# summarize the results in two tables:
-#   Table 1: Frobenius norms  ||C1||, ||C2||, ||C3||, ||C4||
-#   Table 2: Relative norm differences (the 4 ratios printed at end of each run)
+# Sweep scaling_gemm_gradeTest2 over:
+#   - s = number of slices (moduli), 2..20
+#   - t = scaling exponent range (r_k in [-t, t]), 0, 2, 4, ..., 60
+#
+# For each (s, t) it runs the binary and writes a CSV row with all 4 comparisons
+# (8 values: 4 elementwise + 4 Frobenius). Columns:
+#   s, t,
+#   elem_C2_C1, elem_C3_C1, elem_C4_C1, elem_C3_C4,
+#   frob_C1_C2, frob_C1_C3, frob_C1_C4, frob_C3_C4
+# where (C1 = A*B FP64 ref, C2 = FP64 scaled, C3 = INT8 scaled, C4 = INT8 unscaled):
+#   elem_*  = max_ij |Cx - Cref| / |Cref|
+#   frob_*  = ||Cref - Cx||_F / ||Cref||_F
 #
 # Usage:
-#   ./run_scaling_sweep.sh
-#
+#   ./run_scaling_sweep.sh [N] [seed] [out.csv]
+#   defaults: N=1024, seed=12345,
+#             out=Test2_<date>_size<NxN>_N<N>_seed<SEED>.csv
+#                 (e.g. Test2_2026-07-07_size1024x1024_N1024_seed12345.csv)
+
 set -euo pipefail
 
-# ---- Configuration ---------------------------------------------------------
-N=1024                 # matrix size (N = K = M)
-MODULI=16              # INT8 moduli count (2nd arg, constant)
-SEED=12345            # RNG seed (3rd arg, constant)
-RANGE_START=0          # 4th arg sweep start
-RANGE_STEP=2
-RANGE_END=54
-EXE=./scaling_gemm_gradeTest2
+N="${1:-1024}"
+SEED="${2:-12345}"
+# Default CSV name: Test2_<date>_size<NxN>_N<N>_seed<SEED>.csv
+DEFAULT_OUT="Test2_$(date +%Y-%m-%d)_size${N}x${N}_N${N}_seed${SEED}.csv"
+OUT="${3:-$DEFAULT_OUT}"
 
+BINARY="./scaling_gemm_gradeTest2"
 GEMMUL8_PATH="${GEMMUL8_PATH:-/home/kswirydo/GEMMul8}"
 ROCM_PATH="${ROCM_PATH:-/opt/rocm}"
 export LD_LIBRARY_PATH="${GEMMUL8_PATH}/lib:${ROCM_PATH}/lib:${LD_LIBRARY_PATH:-}"
 
-if [[ ! -x "$EXE" ]]; then
-    echo "ERROR: executable '$EXE' not found or not executable." >&2
-    echo "Build it first with: make scaling_gemm_gradeTest2" >&2
+if [[ ! -x "$BINARY" ]]; then
+    echo "$BINARY not found. Build it first: make scaling_gemm_gradeTest2" >&2
     exit 1
 fi
 
-# ---- Detect GPU model (for the CSV file names) -----------------------------
-# Capture rocminfo output first (avoid SIGPIPE from an early 'awk exit' under
-# 'set -o pipefail'), then take the first AMD Instinct marketing name.
-rocm_out="$(rocminfo 2>/dev/null || true)"
-GPU_MODEL="$(printf '%s\n' "$rocm_out" \
-    | awk -F: '/Marketing Name/ && /Instinct/ && !seen {gsub(/^[ \t]+|[ \t]+$/, "", $2); print $2; seen=1}')"
-[[ -z "$GPU_MODEL" ]] && GPU_MODEL="unknownGPU"
-# Sanitize for use in a filename (spaces/slashes -> underscores).
-GPU_TAG="$(printf '%s' "$GPU_MODEL" | tr -c 'A-Za-z0-9._-' '_' | sed 's/_\+/_/g; s/^_//; s/_$//')"
+# t = 0, 2, 4, ..., 60 ; s = 2..20
+T_VALUES=($(seq 0 2 60))
+S_VALUES=($(seq 2 20))
 
-DATE_TAG="$(date +%Y%m%d_%H%M%S)"
-CSV_NORMS="scaling_sweep_norms_${DATE_TAG}_N${N}_seed${SEED}_${GPU_TAG}.csv"
-CSV_DIFFS="scaling_sweep_diffs_${DATE_TAG}_N${N}_seed${SEED}_${GPU_TAG}.csv"
+total=$(( ${#T_VALUES[@]} * ${#S_VALUES[@]} ))
+done=0
 
-# ---- Collect results -------------------------------------------------------
-# Temp files hold one aligned row per range value (for the pretty tables).
-norms_tbl="$(mktemp)"
-diffs_tbl="$(mktemp)"
-trap 'rm -f "$norms_tbl" "$diffs_tbl"' EXIT
+echo "s,t,elem_C2_C1,elem_C3_C1,elem_C4_C1,elem_C3_C4,frob_C1_C2,frob_C1_C3,frob_C1_C4,frob_C3_C4" > "$OUT"
 
-# CSV headers.
-echo "range,||C1||_F,||C2||_F,||C3||_F,||C4||_F" > "$CSV_NORMS"
-echo "range,|C1-C2|/|C1|,|C1-C3|/|C1|,|C1-C4|/|C1|,|C3-C4|/|C4|" > "$CSV_DIFFS"
+# Extract the numeric value after "= " on the last matching line.
+extract() {
+    # $1 = output text, $2 = grep pattern
+    grep -E "$2" <<< "$1" | tail -n 1 | sed -E 's/.*=[[:space:]]*//'
+}
 
-# Helper: extract the numeric value at end of the first line containing a
-# fixed (literal) substring. Uses index() to avoid regex metacharacter issues
-# with the '|' characters in the norm labels.
-extract() { awk -v s="$1" 'index($0, s) { print $NF; exit }'; }
+for t in "${T_VALUES[@]}"; do
+    for s in "${S_VALUES[@]}"; do
+        done=$(( done + 1 ))
+        echo "[${done}/${total}] s=${s} t=${t} ..."
 
-for (( r = RANGE_START; r <= RANGE_END; r += RANGE_STEP )); do
-    out="$("$EXE" "$N" "$MODULI" "$SEED" "$r" 2>/dev/null)"
+        if ! out="$("$BINARY" "$N" "$s" "$SEED" "$t" 2>&1)"; then
+            echo "[warn] run failed (s=${s}, t=${t})" >&2
+            echo "${s},${t},,,,,,,," >> "$OUT"
+            continue
+        fi
 
-    c1=$(printf '%s\n' "$out" | extract '||C1||_F =')
-    c2=$(printf '%s\n' "$out" | extract '||C2||_F =')
-    c3=$(printf '%s\n' "$out" | extract '||C3||_F =')
-    c4=$(printf '%s\n' "$out" | extract '||C4||_F =')
+        elem_c2="$(extract "$out" 'max_ij \|C2 - C1\| / \|C1\|')"
+        elem_c3="$(extract "$out" 'max_ij \|C3 - C1\| / \|C1\|')"
+        elem_c4="$(extract "$out" 'max_ij \|C4 - C1\| / \|C1\|')"
+        elem_c34="$(extract "$out" 'max_ij \|C3 - C4\| / \|C4\|')"
+        frob_c2="$(extract "$out" '\|\|C1 - C2\|\|_F / \|\|C1\|\|_F')"
+        frob_c3="$(extract "$out" '\|\|C1 - C3\|\|_F / \|\|C1\|\|_F')"
+        frob_c4="$(extract "$out" '\|\|C1 - C4\|\|_F / \|\|C1\|\|_F')"
+        frob_c34="$(extract "$out" '\|\|C3 - C4\|\|_F / \|\|C4\|\|_F')"
 
-    d12=$(printf '%s\n' "$out" | extract '||C1 - C2||_F')
-    d13=$(printf '%s\n' "$out" | extract '||C1 - C3||_F')
-    d14=$(printf '%s\n' "$out" | extract '||C1 - C4||_F')
-    d34=$(printf '%s\n' "$out" | extract '||C3 - C4||_F')
+        if [[ -z "$elem_c2" || -z "$elem_c3" || -z "$elem_c4" || -z "$elem_c34" \
+              || -z "$frob_c2" || -z "$frob_c3" || -z "$frob_c4" || -z "$frob_c34" ]]; then
+            echo "[warn] parse failed (s=${s}, t=${t})" >&2
+            echo "${s},${t},,,,,,,," >> "$OUT"
+            continue
+        fi
 
-    printf '%-8d %-26s %-26s %-26s %-26s\n' "$r" "$c1" "$c2" "$c3" "$c4" >> "$norms_tbl"
-    printf '%-8d %-26s %-26s %-26s %-26s\n' "$r" "$d12" "$d13" "$d14" "$d34" >> "$diffs_tbl"
-
-    printf '%d,%s,%s,%s,%s\n' "$r" "$c1" "$c2" "$c3" "$c4" >> "$CSV_NORMS"
-    printf '%d,%s,%s,%s,%s\n' "$r" "$d12" "$d13" "$d14" "$d34" >> "$CSV_DIFFS"
+        echo "${s},${t},${elem_c2},${elem_c3},${elem_c4},${elem_c34},${frob_c2},${frob_c3},${frob_c4},${frob_c34}" >> "$OUT"
+    done
 done
 
-# ---- Display raw CSVs first ------------------------------------------------
-echo "############################################################################################################################"
-echo "# CSV OUTPUT"
-echo "############################################################################################################################"
 echo
-echo ">>> $CSV_NORMS"
-cat "$CSV_NORMS"
-echo
-echo ">>> $CSV_DIFFS"
-cat "$CSV_DIFFS"
-echo
-
-# ---- Print tables ----------------------------------------------------------
-echo "============================================================================================================================"
-echo "scaling_gemm_gradeTest2 sweep : N=$N, moduli=$MODULI, seed=$SEED, range=${RANGE_START}..${RANGE_END} step ${RANGE_STEP}"
-echo "GPU: $GPU_MODEL"
-echo "============================================================================================================================"
-echo
-echo "TABLE 1 : Frobenius norms"
-echo "----------------------------------------------------------------------------------------------------------------------------"
-printf '%-8s %-26s %-26s %-26s %-26s\n' "range" "||C1||_F" "||C2||_F" "||C3||_F" "||C4||_F"
-echo "----------------------------------------------------------------------------------------------------------------------------"
-cat "$norms_tbl"
-echo
-echo "TABLE 2 : Relative norm differences"
-echo "----------------------------------------------------------------------------------------------------------------------------"
-printf '%-8s %-26s %-26s %-26s %-26s\n' "range" "|C1-C2|/|C1|" "|C1-C3|/|C1|" "|C1-C4|/|C1|" "|C3-C4|/|C4|"
-echo "         (FP64 scaled)              (INT8 scaled)              (INT8 unscaled)            (INT8 sc vs unsc)"
-echo "----------------------------------------------------------------------------------------------------------------------------"
-cat "$diffs_tbl"
-echo "----------------------------------------------------------------------------------------------------------------------------"
-echo
-echo "CSV files saved:"
-echo "  $CSV_NORMS"
-echo "  $CSV_DIFFS"
+echo "Done. Wrote ${OUT}"

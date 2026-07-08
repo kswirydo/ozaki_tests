@@ -40,8 +40,9 @@
  *       -lgemmul8 -lhipblas -lamdhip64 -lhipblaslt
  *
  * Usage:
- *   ./scaling_gemm_gradeTest2 [N] [moduli] [seed]
- *   defaults: N=1024, moduli=16, seed=12345
+ *   ./scaling_gemm_gradeTest2 [N] [moduli] [seed] [t]
+ *   defaults: N=1024, moduli=16, seed=12345, t=53
+ *   t = scaling exponent range: r_k drawn uniformly from [-t, t] (t=0 => no scaling).
  */
 
 #include <hip/hip_runtime.h>
@@ -103,14 +104,29 @@ static double frob(const std::vector<double>& X) {
     return std::sqrt(s);
 }
 
+// Elementwise relative error: max_{i,j} |Y[i,j] - Xtrue[i,j]| / |Xtrue[i,j]|,
+// where Xtrue is the "true" result C^(2). Entries with an exactly-zero true value
+// are skipped, since a relative error is undefined there.
+static double max_rel_err(const std::vector<double>& Xtrue, const std::vector<double>& Y) {
+    double max_rel = 0.0;
+    for (size_t t = 0; t < Xtrue.size(); ++t) {
+        if (Xtrue[t] == 0.0) continue;
+        double rel = std::fabs(Y[t] - Xtrue[t]) / std::fabs(Xtrue[t]);
+        if (rel > max_rel) max_rel = rel;
+    }
+    return max_rel;
+}
+
 int main(int argc, char** argv) {
     size_t N = 1024;
     int    moduli = 16;
     unsigned long seed = 12345UL;
+    int    trange = 53;   // scaling exponent range: r_k in [-trange, trange]
 
     if (argc > 1) N = std::stoull(argv[1]);
     if (argc > 2) moduli = std::stoi(argv[2]);
     if (argc > 3) seed = std::stoul(argv[3]);
+    if (argc > 4) trange = std::stoi(argv[4]);
 
     const size_t K = N, M = N;
     const size_t size_A = N * K, size_B = K * M, size_C = N * M;
@@ -121,7 +137,8 @@ int main(int argc, char** argv) {
     std::cout << "  N = K = M      : " << N << "\n";
     std::cout << "  INT8 moduli    : " << moduli << "\n";
     std::cout << "  RNG seed       : " << seed << "\n";
-    std::cout << "  D_k = 2^r_k, r_k in [-53, 53] (integer), applied to shared dim\n\n";
+    std::cout << "  D_k = 2^r_k, r_k in [-" << trange << ", " << trange
+              << "] (integer), applied to shared dim\n\n";
 
     // ---- (1) Same A, B as gradeTest1 (no zero-planting) --------------------
     std::vector<double> h_A(size_A), h_B(size_B);
@@ -133,7 +150,7 @@ int main(int argc, char** argv) {
 
     // ---- (2) Scaling vector D = 2^r, r in [-54, 54] ------------------------
     std::mt19937_64 gen_D(seed + 2024);
-    std::uniform_int_distribution<int> rdist(-53, 53);
+    std::uniform_int_distribution<int> rdist(-trange, trange);
     std::vector<double> D(K), Dinv(K);
     std::vector<int> rexp(K);
     for (size_t k = 0; k < K; ++k) {
@@ -225,19 +242,31 @@ int main(int argc, char** argv) {
     std::cout << "  C1 = A*B (FP64)          C2 = A_scal*B_scal (FP64)\n";
     std::cout << "  C3 = A_scal*B_scal (INT8)  C4 = A*B (INT8)\n";
     std::cout << "------------------------------------------------------------\n";
-    std::cout << std::scientific << std::setprecision(6);
-    std::cout << "  ||C1||_F = " << frob(h_C1) << "\n";
-    std::cout << "  ||C2||_F = " << frob(h_C2) << "\n";
-    std::cout << "  ||C3||_F = " << frob(h_C3) << "\n";
-    std::cout << "  ||C4||_F = " << frob(h_C4) << "\n\n";
+    std::cout << std::scientific << std::setprecision(16);
+    std::cout << "  ||C1||_F = " << std::setw(16) << frob(h_C1) << "\n";
+    std::cout << "  ||C2||_F = " << std::setw(16) << frob(h_C2) << "\n";
+    std::cout << "  ||C3||_F = " << std::setw(16) << frob(h_C3) << "\n";
+    std::cout << "  ||C4||_F = " << std::setw(16) << frob(h_C4) << "\n\n";
     std::cout << "  ||C1 - C2||_F / ||C1||_F  (FP64 scaled   vs FP64 ref) = "
-              << rel_frob(h_C1, h_C2) << "\n";
+              << std::setw(16) << rel_frob(h_C1, h_C2) << "\n";
     std::cout << "  ||C1 - C3||_F / ||C1||_F  (INT8 scaled   vs FP64 ref) = "
-              << rel_frob(h_C1, h_C3) << "\n";
+              << std::setw(16) << rel_frob(h_C1, h_C3) << "\n";
     std::cout << "  ||C1 - C4||_F / ||C1||_F  (INT8 unscaled vs FP64 ref) = "
-              << rel_frob(h_C1, h_C4) << "\n";
+              << std::setw(16) << rel_frob(h_C1, h_C4) << "\n";
     std::cout << "  ||C3 - C4||_F / ||C4||_F  (INT8 scaled   vs INT8 unscaled) = "
-              << rel_frob(h_C4, h_C3) << "\n";
+              << std::setw(16) << rel_frob(h_C4, h_C3) << "\n";
+    std::cout << "------------------------------------------------------------\n";
+    std::cout << "Elementwise relative error  max_ij |Cx - Cref| / |Cref|\n";
+    std::cout << "  (true result C^(2) = C1 = A*B FP64 as reference)\n";
+    std::cout << "------------------------------------------------------------\n";
+    std::cout << "  max_ij |C2 - C1| / |C1|   (FP64 scaled   vs FP64 ref) = "
+              << std::setw(16) << max_rel_err(h_C1, h_C2) << "\n";
+    std::cout << "  max_ij |C3 - C1| / |C1|   (INT8 scaled   vs FP64 ref) = "
+              << std::setw(16) << max_rel_err(h_C1, h_C3) << "\n";
+    std::cout << "  max_ij |C4 - C1| / |C1|   (INT8 unscaled vs FP64 ref) = "
+              << std::setw(16) << max_rel_err(h_C1, h_C4) << "\n";
+    std::cout << "  max_ij |C3 - C4| / |C4|   (INT8 scaled   vs INT8 unscaled) = "
+              << std::setw(16) << max_rel_err(h_C4, h_C3) << "\n";
     std::cout << "------------------------------------------------------------\n";
 
     HIP_CHECK(hipFree(d_work));
