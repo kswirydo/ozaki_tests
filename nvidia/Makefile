@@ -13,13 +13,20 @@ LDFLAGS  = -L$(GEMMUL8_PATH)/lib -Xlinker -rpath -Xlinker $(GEMMUL8_PATH)/lib
 LIBS_GEMMUL8 = -lgemmul8 -lcublas -lcublasLt -lcudart -lcuda -lnvidia-ml -ldl
 
 TARGET_AB_EMU_COMPARE = ab_gemm_emu_compare
+TARGET_AB_TABLE_LATEX = ab_table_latex_benchmark
 
-.PHONY: all ab_gemm_emu_compare clean
+# Matrix generation (cuSOLVER QR + cuRAND) is needed by the LaTeX table benchmark.
+LIBS_GEN = -lcusolver -lcurand
 
-all: ab_gemm_emu_compare
+.PHONY: all ab_gemm_emu_compare ab_table_latex_benchmark clean
+
+all: ab_gemm_emu_compare ab_table_latex_benchmark
 
 ab_gemm_emu_compare: ab_gemm_emu_compare.cu cuda_helpers.cuh
 	$(NVCC) $(NVCC_ARCH) $(CXXFLAGS) $(INCLUDES) ab_gemm_emu_compare.cu -o $(TARGET_AB_EMU_COMPARE) $(LDFLAGS) $(LIBS_GEMMUL8)
 
+ab_table_latex_benchmark: ab_table_latex_benchmark.cu cuda_helpers.cuh cuda_conditioned_matrix.cuh
+	$(NVCC) $(NVCC_ARCH) $(CXXFLAGS) $(INCLUDES) ab_table_latex_benchmark.cu -o $(TARGET_AB_TABLE_LATEX) $(LDFLAGS) $(LIBS_GEMMUL8) $(LIBS_GEN)
+
 clean:
-	rm -f $(TARGET_AB_EMU_COMPARE)
+	rm -f $(TARGET_AB_EMU_COMPARE) $(TARGET_AB_TABLE_LATEX)
