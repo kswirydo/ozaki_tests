@@ -15,8 +15,13 @@ table_benchmark_power
 table_benchmark_power_fp8
 gemm_vs_gemmlt_benchmark
 gemm_int8_vs_fp8_benchmark
+ab_table_benchmark
+ab_table_benchmark_fast
+ab_table_size_benchmark
+aspect_ratio_test_alt
 special_zero_gemm_gradeTest1
 scaling_gemm_gradeTest2
+scaling_gemm_gradeTest3
 
 # Python cache
 __pycache__/
@@ -41,6 +46,11 @@ test_matrices_*/
 gemm_benchmark_*.csv
 ab_gemm_benchmark_*.csv
 simple_gemm_benchmark_*.csv
+ab_table_benchmark_*.csv
+scaling_sweep_norms_*.csv
+scaling_sweep_diffs_*.csv
+scaling_sweep3_norms_*.csv
+scaling_sweep3_diffs_*.csv
 
 # Object files
 *.o

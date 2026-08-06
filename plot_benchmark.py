@@ -19,6 +19,20 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
 
+try:
+    from plot_ab_table_heatmap import (
+        LOG10_COND_K_MAX,
+        LOG10_COND_K_MIN,
+        LOG10_ERR_YLIM,
+        MACHINE_ACCURACY,
+    )
+except ImportError:
+    LOG10_COND_K_MIN = 0
+    LOG10_COND_K_MAX = 17
+    LOG10_ERR_YLIM = (-16.5, 8.0)
+    MACHINE_ACCURACY = 1e-16
+
+
 def find_latest_csv(folder):
     """Find the most recent benchmark CSV file in the folder."""
     patterns = [
@@ -249,20 +263,22 @@ def plot_accuracy(df, N, K, M, moduli_list, output_prefix):
                 ax.plot(x, y_log, marker=marker, linewidth=2, markersize=8,
                        color=color, label=f'Ozaki-II {mode}')
         
-        # Add machine epsilon reference line
-        ax.axhline(y=np.log10(2.2e-16), color='gray', linestyle=':', 
-                  linewidth=1.5, label='Machine epsilon (FP64)')
-        
+        ax.axhline(
+            y=np.log10(MACHINE_ACCURACY),
+            color='gray',
+            linestyle=':',
+            linewidth=1.5,
+            label='Machine epsilon (FP64)',
+        )
+
         ax.set_xlabel('log₁₀(Condition Number)', fontsize=12)
         ax.set_ylabel('log₁₀(Relative Frobenius Error)', fontsize=12)
         ax.set_title(f'GEMM Accuracy: {dims_str}\n{num_moduli} Moduli', fontsize=14)
         ax.legend(loc='best', fontsize=10)
         ax.grid(True, alpha=0.3)
-        
-        # Set x-ticks based on data
-        x_min = int(df['log10_cond'].min())
-        x_max = int(df['log10_cond'].max())
-        ax.set_xticks(range(x_min, x_max + 1))
+        ax.set_xlim(LOG10_COND_K_MIN, LOG10_COND_K_MAX)
+        ax.set_xticks(range(LOG10_COND_K_MIN, LOG10_COND_K_MAX + 1))
+        ax.set_ylim(*LOG10_ERR_YLIM)
         
         # Save figure
         output_file = f"{output_prefix}_accuracy_{num_moduli}moduli.png"
