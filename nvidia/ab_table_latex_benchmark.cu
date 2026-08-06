@@ -1,9 +1,10 @@
 /**
  * A/B Table LaTeX Benchmark (CUDA)
  * --------------------------------
- * Generates two DISTINCT square matrices A and B, each with 2-norm condition
- * number ~1e3, computes C = A * B with several methods, prints on-screen run
- * statistics + a summary table, and finally a LaTeX table (booktabs).
+ * For each requested matrix size N, generates two DISTINCT N x N matrices A and
+ * B, each with 2-norm condition number ~1e3, computes C = A * B with several
+ * methods, prints on-screen run statistics + summary tables, and finally a
+ * LaTeX table (booktabs) with one row per size.
  *
  * Methods (accuracy measured vs native FP64 reference):
  *   1. Native FP64                (cublasDgemm)
@@ -21,9 +22,9 @@
  *   make ab_table_latex_benchmark
  *
  * Usage:
- *   ./ab_table_latex_benchmark [N] [output.tex]
- *     N           matrix dimension (default 4096)
- *     output.tex  optional file to also write the LaTeX table to
+ *   ./ab_table_latex_benchmark [--tex out.tex] <size1> [size2] [size3] ...
+ *     e.g. ./ab_table_latex_benchmark 1024 2048 4096 8192
+ *   With no sizes given, defaults to 4096.
  */
 
 #include "cuda_helpers.cuh"
@@ -78,6 +79,11 @@ struct MethodResult {
     double frob_rel_err = 0.0;    // relative Frobenius error vs native FP64
     double workspace_mb = 0.0;
     bool   is_reference = false;
+};
+
+struct BenchmarkResult {
+    int n;
+    std::vector<MethodResult> methods;   // [FP64, INT8-12, INT8-16, FP8-10, FP8-12]
 };
 
 void summarize(MethodResult& m, int n) {
@@ -169,13 +175,101 @@ void time_fp8_ozaki(cublasLtHandle_t hlt, int n, double* d_A, double* d_B, doubl
     CUDA_CHECK(cudaMemcpy(h_out.data(), d_C, size_C * sizeof(double), cudaMemcpyDeviceToHost));
 }
 
+/** Generate A, B (distinct, both cond 1e3), warm up, and time all methods for one size. */
+BenchmarkResult run_benchmark(int n, cublasHandle_t cublas, cublasLtHandle_t cublaslt,
+                              cusolverDnHandle_t cusolver, curandGenerator_t gen) {
+    const size_t size  = static_cast<size_t>(n) * static_cast<size_t>(n);
+    const size_t bytes = size * sizeof(double);
+    const double alpha = 1.0, beta = 0.0;
+    const double mb = 1024.0 * 1024.0;
+
+    double *d_A, *d_B, *d_C;
+    CUDA_CHECK(cudaMalloc(&d_A, bytes));
+    CUDA_CHECK(cudaMalloc(&d_B, bytes));
+    CUDA_CHECK(cudaMalloc(&d_C, bytes));
+
+    std::cerr << "  Generating A (" << n << "x" << n << ", cond 1e" << kLog10Cond << ")..." << std::flush;
+    CURAND_CHECK(curandSetPseudoRandomGeneratorSeed(gen, 12345ULL));
+    generate_conditioned_matrix_cuda(cublas, cusolver, gen, n, n, kLog10Cond, d_A);
+    std::cerr << " B..." << std::flush;
+    CURAND_CHECK(curandSetPseudoRandomGeneratorSeed(gen, 67890ULL));
+    generate_conditioned_matrix_cuda(cublas, cusolver, gen, n, n, kLog10Cond, d_B);
+    std::cerr << " done" << std::endl;
+
+    const size_t ws_int8_12 = gemmul8::workSize<false, gemmul8::Backend::INT8>(n, n, n, kInt8Moduli12);
+    const size_t ws_int8_16 = gemmul8::workSize<false, gemmul8::Backend::INT8>(n, n, n, kInt8Moduli16);
+    const size_t ws_fp8_10  = gemmul8::workSize<false, gemmul8::Backend::FP8>(n, n, n, kFp8Moduli10);
+    const size_t ws_fp8_12  = gemmul8::workSize<false, gemmul8::Backend::FP8>(n, n, n, kFp8Moduli12);
+    const size_t ws_max     = std::max({ws_int8_12, ws_int8_16, ws_fp8_10, ws_fp8_12});
+
+    void* d_work;
+    CUDA_CHECK(cudaMalloc(&d_work, ws_max));
+
+    std::vector<double> h_C_ref(size), h_C_test(size);
+
+    std::cerr << "  Warmup..." << std::flush;
+    for (int w = 0; w < kNumWarmup; w++) {
+        CUBLAS_CHECK(cublasDgemm(cublas, CUBLAS_OP_N, CUBLAS_OP_N, n, n, n, &alpha, d_A, n, d_B, n,
+                                 &beta, d_C, n));
+        gemmul8::gemm<double, gemmul8::Backend::INT8>(cublas, CUBLAS_OP_N, CUBLAS_OP_N, n, n, n, &alpha,
+                                                      d_A, n, d_B, n, &beta, d_C, n, kInt8Moduli12,
+                                                      kFastMode, d_work);
+        gemmul8::gemmLt<double, gemmul8::Backend::FP8>(cublaslt, CUBLAS_OP_N, CUBLAS_OP_N, n, n, n, &alpha,
+                                                       d_A, n, d_B, n, &beta, d_C, n, kFp8Moduli10,
+                                                       kFastMode, d_work);
+    }
+    CUDA_CHECK(cudaDeviceSynchronize());
+    std::cerr << " benchmarking (" << kNumTimed << " runs/method)..." << std::flush;
+
+    BenchmarkResult result;
+    result.n = n;
+
+    MethodResult fp64;
+    fp64.name = "FP64 (native)";
+    fp64.is_reference = true;
+    time_dgemm(cublas, n, d_A, d_B, d_C, alpha, beta, fp64.run_ms, h_C_ref);
+    summarize(fp64, n);
+    result.methods.push_back(fp64);
+
+    auto add_int8 = [&](const char* name, int moduli, size_t ws) {
+        MethodResult r;
+        r.name = name;
+        r.workspace_mb = ws / mb;
+        time_int8_ozaki(cublas, n, d_A, d_B, d_C, alpha, beta, moduli, d_work, r.run_ms, h_C_test);
+        r.frob_rel_err = compute_frobenius_rel_error(h_C_ref.data(), h_C_test.data(), size);
+        summarize(r, n);
+        result.methods.push_back(r);
+    };
+    auto add_fp8 = [&](const char* name, int moduli, size_t ws) {
+        MethodResult r;
+        r.name = name;
+        r.workspace_mb = ws / mb;
+        time_fp8_ozaki(cublaslt, n, d_A, d_B, d_C, alpha, beta, moduli, d_work, r.run_ms, h_C_test);
+        r.frob_rel_err = compute_frobenius_rel_error(h_C_ref.data(), h_C_test.data(), size);
+        summarize(r, n);
+        result.methods.push_back(r);
+    };
+
+    add_int8("INT8 Ozaki-II (12)", kInt8Moduli12, ws_int8_12);
+    add_int8("INT8 Ozaki-II (16)", kInt8Moduli16, ws_int8_16);
+    add_fp8("FP8 Ozaki-II (10)", kFp8Moduli10, ws_fp8_10);
+    add_fp8("FP8 Ozaki-II (12)", kFp8Moduli12, ws_fp8_12);
+    std::cerr << " done" << std::endl;
+
+    CUDA_CHECK(cudaFree(d_work));
+    CUDA_CHECK(cudaFree(d_A));
+    CUDA_CHECK(cudaFree(d_B));
+    CUDA_CHECK(cudaFree(d_C));
+    return result;
+}
+
 /** Per-method run statistics + full list of individual timings (like the HIP file). */
-void print_run_stats_table(int n, const std::vector<MethodResult>& methods) {
+void print_run_stats_table(const BenchmarkResult& r) {
     const char* sep =
         "+----------------------+----------+----------+----------+----------+----------+";
 
     std::cout << std::endl;
-    std::cout << "Run statistics for " << n << "x" << n << " (" << kNumTimed
+    std::cout << "Run statistics for " << r.n << "x" << r.n << " (" << kNumTimed
               << " timed runs after " << kNumWarmup << " warmup iterations), times in ms" << std::endl;
     std::cout << sep << std::endl;
     std::cout << "| " << std::setw(20) << std::left << "Method" << std::right << " |"
@@ -184,7 +278,7 @@ void print_run_stats_table(int n, const std::vector<MethodResult>& methods) {
               << std::setw(9) << "stddev" << " |" << std::endl;
     std::cout << sep << std::endl;
 
-    for (const MethodResult& m : methods) {
+    for (const MethodResult& m : r.methods) {
         std::cout << "| " << std::setw(20) << std::left << m.name << std::right
                   << std::fixed << std::setprecision(3)
                   << " |" << std::setw(9) << m.mean_ms
@@ -196,8 +290,7 @@ void print_run_stats_table(int n, const std::vector<MethodResult>& methods) {
     }
     std::cout << sep << std::endl;
 
-    // Full list of individual timings, wrapped at 10 values per line.
-    for (const MethodResult& m : methods) {
+    for (const MethodResult& m : r.methods) {
         std::cout << "  " << m.name << " runs (ms):" << std::endl;
         std::cout << std::fixed << std::setprecision(3);
         for (size_t i = 0; i < m.run_ms.size(); i++) {
@@ -208,69 +301,87 @@ void print_run_stats_table(int n, const std::vector<MethodResult>& methods) {
     }
 }
 
-/** Summary box table (one row per method) with workspace, throughput and accuracy. */
-void print_summary_table(int n, const std::string& device,
-                         const std::vector<MethodResult>& methods) {
-    const char* sep =
-        "+----------------------+----------+-----------------------------+---------------+";
-
+/** Summary tables (one row per size): throughput/speedup, then accuracy. */
+void print_summary_tables(const std::vector<BenchmarkResult>& results, const std::string& device) {
     std::cout << std::endl;
     std::cout << "==================================================================================="
+                 "=============="
               << std::endl;
-    std::cout << "                     SUMMARY TABLE  (C = A * B, A != B)" << std::endl;
-    std::cout << "   N = " << n << "   |   cond(A) = cond(B) = 10^" << kLog10Cond << "   |   "
-              << kNumWarmup << " warmup + " << kNumTimed << " timed runs   |   " << device << std::endl;
+    std::cout << "                              SUMMARY  (C = A * B, A != B)" << std::endl;
+    std::cout << "   cond(A) = cond(B) = 10^" << kLog10Cond << "   |   " << kNumWarmup << " warmup + "
+              << kNumTimed << " timed runs per method   |   " << device << std::endl;
     std::cout << "==================================================================================="
+                 "=============="
               << std::endl;
-    std::cout << std::endl;
 
-    std::cout << sep << std::endl;
-    std::cout << "| " << std::setw(20) << std::left << "Method" << std::right << " |"
-              << std::setw(9) << "WS (MB)" << " |"
-              << std::setw(28) << "mean TF (min-max)" << " |"
-              << std::setw(14) << "Accuracy" << " |" << std::endl;
-    std::cout << sep << std::endl;
-
-    for (const MethodResult& m : methods) {
-        std::ostringstream perf;
-        perf << std::fixed << std::setprecision(2) << m.mean_tflops
-             << " (" << m.min_tflops << "-" << m.max_tflops << ")";
-
-        std::ostringstream ws;
-        if (m.workspace_mb > 0.0) ws << std::fixed << std::setprecision(1) << m.workspace_mb;
-        else                      ws << "--";
-
-        std::ostringstream acc;
-        if (m.is_reference) acc << "-- (ref)";
-        else                acc << std::scientific << std::setprecision(2) << m.frob_rel_err;
-
-        std::cout << "| " << std::setw(20) << std::left << m.name << std::right
-                  << " |" << std::setw(9) << ws.str()
-                  << " |" << std::setw(28) << perf.str()
-                  << " |" << std::setw(14) << acc.str()
-                  << " |" << std::endl;
+    // --- Throughput / speedup table ---
+    const char* psep =
+        "+---------+------------+---------------------+---------------------+---------------------+---------------------+";
+    std::cout << "\nThroughput: mean TFLOP/s (speedup vs native FP64)\n";
+    std::cout << psep << std::endl;
+    std::cout << "| " << std::setw(7) << std::left << "Size" << std::right << " |"
+              << std::setw(11) << "Native" << " |"
+              << std::setw(20) << "INT8 Ozaki (12)" << " |"
+              << std::setw(20) << "INT8 Ozaki (16)" << " |"
+              << std::setw(20) << "FP8 Ozaki (10)" << " |"
+              << std::setw(20) << "FP8 Ozaki (12)" << " |" << std::endl;
+    std::cout << psep << std::endl;
+    for (const BenchmarkResult& r : results) {
+        const double nat = r.methods[0].mean_tflops;
+        std::cout << "| " << std::setw(7) << std::left << r.n << std::right << std::fixed
+                  << std::setprecision(2) << " |" << std::setw(11) << nat << " |";
+        for (size_t i = 1; i < r.methods.size(); i++) {
+            std::ostringstream cell;
+            cell << std::fixed << std::setprecision(2) << r.methods[i].mean_tflops << " ("
+                 << std::setprecision(2) << (r.methods[i].mean_tflops / nat) << "x)";
+            std::cout << std::setw(20) << cell.str() << " |";
+        }
+        std::cout << std::endl;
     }
-    std::cout << sep << std::endl;
-    std::cout << "Legend: WS = Ozaki-II workspace; TF = TFLOP/s (mean, with slowest-fastest run in "
-              << "parentheses); Accuracy = rel. Frobenius error vs native FP64." << std::endl;
+    std::cout << psep << std::endl;
+
+    // --- Accuracy + workspace table ---
+    const char* asep =
+        "+---------+--------------+--------------+--------------+--------------+";
+    std::cout << "\nAccuracy: relative Frobenius error vs native FP64\n";
+    std::cout << asep << std::endl;
+    std::cout << "| " << std::setw(7) << std::left << "Size" << std::right << " |"
+              << std::setw(13) << "INT8 (12)" << " |"
+              << std::setw(13) << "INT8 (16)" << " |"
+              << std::setw(13) << "FP8 (10)" << " |"
+              << std::setw(13) << "FP8 (12)" << " |" << std::endl;
+    std::cout << asep << std::endl;
+    for (const BenchmarkResult& r : results) {
+        std::cout << "| " << std::setw(7) << std::left << r.n << std::right;
+        for (size_t i = 1; i < r.methods.size(); i++) {
+            std::ostringstream cell;
+            cell << std::scientific << std::setprecision(2) << r.methods[i].frob_rel_err;
+            std::cout << " |" << std::setw(13) << cell.str();
+        }
+        std::cout << " |" << std::endl;
+    }
+    std::cout << asep << std::endl;
+
+    std::cout << "\nOzaki-II workspace (MB), independent of size class shown above:" << std::endl;
+    if (!results.empty()) {
+        const BenchmarkResult& r = results.back();
+        std::cout << "  INT8(12)=" << std::fixed << std::setprecision(1) << r.methods[1].workspace_mb
+                  << "  INT8(16)=" << r.methods[2].workspace_mb
+                  << "  FP8(10)=" << r.methods[3].workspace_mb
+                  << "  FP8(12)=" << r.methods[4].workspace_mb << "  (for N=" << r.n << ")" << std::endl;
+    }
 }
 
-/** Booktabs LaTeX table matching ../ab_table_size_benchmark.cu (needs \usepackage{booktabs}).
- *  methods order: [FP64 (native), INT8-12, INT8-16, FP8-10, FP8-12]. Speedup is vs native FP64. */
-void write_latex_table(std::ostream& os, int n, const std::string& device,
-                       const std::vector<MethodResult>& methods) {
-    const MethodResult& native  = methods[0];
-    const MethodResult& int8_12 = methods[1];
-    const MethodResult& int8_16 = methods[2];
-    const MethodResult& fp8_10  = methods[3];
-    const MethodResult& fp8_12  = methods[4];
-
+/** Booktabs LaTeX table (one row per size) matching ../ab_table_size_benchmark.cu.
+ *  methods order per row: [FP64, INT8-12, INT8-16, FP8-10, FP8-12]. Speedup vs native FP64. */
+void write_latex_table(std::ostream& os, const std::vector<BenchmarkResult>& results,
+                       const std::string& device) {
     os << "% ---- LaTeX table (copy into your document; needs \\usepackage{booktabs}) ----\n";
     os << "\\begin{table}[htbp]\n";
     os << "  \\centering\n";
     os << "  \\caption{GEMMul8 Ozaki~II performance and workspace for $C = AB$ with $A \\neq B$, "
-       << "both $\\kappa = 10^{" << kLog10Cond << "}$ ($N=" << n << "$ on " << device
-       << "). Performance is the mean of " << kNumTimed << " timed runs after " << kNumWarmup
+       << "both $\\kappa = 10^{" << kLog10Cond << "}$ on " << device
+       << ". Performance is the mean of " << kNumTimed << " timed runs after " << kNumWarmup
        << " warmup iterations; speedup is Ozaki~II throughput divided by native FP64 throughput.}\n";
     os << "  \\label{tab:ab_table_ozaki_cond1e" << kLog10Cond << "}\n";
     os << "  \\begin{tabular}{rrrrrrrrrrrrrr}\n";
@@ -286,18 +397,20 @@ void write_latex_table(std::ostream& os, int n, const std::string& device,
        << "& TFLOP/s & Workspace (MB) & Speedup \\\\\n";
     os << "    \\midrule\n";
 
-    auto emit_method = [&](const MethodResult& m) {
-        os << " & " << std::fixed << std::setprecision(2) << m.mean_tflops
-           << " & " << std::setprecision(1) << m.workspace_mb
-           << " & " << std::setprecision(2) << (m.mean_tflops / native.mean_tflops) << "$\\times$";
-    };
-
-    os << "    " << n << " & " << std::fixed << std::setprecision(2) << native.mean_tflops;
-    emit_method(int8_12);
-    emit_method(int8_16);
-    emit_method(fp8_10);
-    emit_method(fp8_12);
-    os << " \\\\\n";
+    for (const BenchmarkResult& r : results) {
+        const double nat = r.methods[0].mean_tflops;
+        auto emit_method = [&](const MethodResult& m) {
+            os << " & " << std::fixed << std::setprecision(2) << m.mean_tflops
+               << " & " << std::setprecision(1) << m.workspace_mb
+               << " & " << std::setprecision(2) << (m.mean_tflops / nat) << "$\\times$";
+        };
+        os << "    " << r.n << " & " << std::fixed << std::setprecision(2) << nat;
+        emit_method(r.methods[1]);
+        emit_method(r.methods[2]);
+        emit_method(r.methods[3]);
+        emit_method(r.methods[4]);
+        os << " \\\\\n";
+    }
 
     os << "    \\bottomrule\n";
     os << "  \\end{tabular}\n";
@@ -306,38 +419,47 @@ void write_latex_table(std::ostream& os, int n, const std::string& device,
 }
 
 int main(int argc, char* argv[]) {
-    int n = 4096;
     std::string tex_path;
+    std::vector<int> sizes;
     for (int i = 1; i < argc; i++) {
         std::string arg = argv[i];
         if (arg == "-h" || arg == "--help") {
-            std::cout << "Usage: " << argv[0] << " [N] [output.tex]\n"
-                      << "  Generates two distinct N x N matrices with cond = 1e" << kLog10Cond
-                      << ",\n  benchmarks C = A*B (FP64 + INT8/FP8 Ozaki, " << kNumTimed
-                      << " runs each), prints run stats,\n  a summary table, and a LaTeX table.\n";
+            std::cout << "Usage: " << argv[0] << " [--tex out.tex] <size1> [size2] ...\n"
+                      << "  For each size: generate two distinct matrices with cond = 1e" << kLog10Cond
+                      << ", benchmark C = A*B\n  (FP64 + INT8/FP8 Ozaki, " << kNumTimed
+                      << " runs each), print run stats, summary tables and a LaTeX table.\n"
+                      << "  Default size if none given: 4096.\n";
             return 0;
         }
-        if (i == 1) {
-            n = std::atoi(arg.c_str());
-            if (n <= 0) {
-                std::cerr << "Invalid N: " << arg << std::endl;
+        if (arg == "--tex" || arg == "-o") {
+            if (i + 1 >= argc) {
+                std::cerr << "error: " << arg << " requires a filename" << std::endl;
                 return 1;
             }
-        } else if (tex_path.empty()) {
-            tex_path = arg;
+            tex_path = argv[++i];
+            continue;
         }
+        int s = std::atoi(arg.c_str());
+        if (s <= 0) {
+            std::cerr << "Invalid size: " << arg << std::endl;
+            return 1;
+        }
+        sizes.push_back(s);
     }
+    if (sizes.empty()) sizes.push_back(4096);
 
     cudaDeviceProp prop;
     CUDA_CHECK(cudaGetDeviceProperties(&prop, 0));
     std::string device = prop.name;
     std::cerr << "Device: " << device << std::endl;
-    std::cerr << "Matrix: " << n << "x" << n << " GEMM C = A * B" << std::endl;
-    std::cerr << "Condition: cond(A) = cond(B) = 1e" << kLog10Cond
-              << " (A and B distinct)" << std::endl;
-    std::cerr << "Runs: " << kNumWarmup << " warmup + " << kNumTimed << " timed per method"
-              << std::endl;
+    std::cerr << "C = A * B with A != B, both cond = 10^" << kLog10Cond << std::endl;
+    std::cerr << kNumWarmup << " warmup + " << kNumTimed << " timed runs per method (FP64, INT8 "
+              << kInt8Moduli12 << "/" << kInt8Moduli16 << ", FP8 " << kFp8Moduli10 << "/"
+              << kFp8Moduli12 << ")" << std::endl;
     std::cerr << "Ozaki mode: " << (kFastMode ? "fast" : "accurate") << std::endl;
+    std::cerr << "Matrix sizes:";
+    for (int s : sizes) std::cerr << " " << s;
+    std::cerr << std::endl << std::endl;
 
     cublasHandle_t     cublas_handle;
     cublasLtHandle_t   cublaslt_handle;
@@ -349,110 +471,28 @@ int main(int argc, char* argv[]) {
     CUSOLVER_CHECK(cusolverDnCreate(&cusolver_handle));
     CURAND_CHECK(curandCreateGenerator(&gen, CURAND_RNG_PSEUDO_DEFAULT));
 
-    const size_t size  = static_cast<size_t>(n) * static_cast<size_t>(n);
-    const size_t bytes = size * sizeof(double);
-
-    double *d_A, *d_B, *d_C;
-    CUDA_CHECK(cudaMalloc(&d_A, bytes));
-    CUDA_CHECK(cudaMalloc(&d_B, bytes));
-    CUDA_CHECK(cudaMalloc(&d_C, bytes));
-
-    // Two DISTINCT matrices: same condition number, different RNG seeds.
-    std::cerr << "Generating matrix A (cond 1e" << kLog10Cond << ")..." << std::flush;
-    CURAND_CHECK(curandSetPseudoRandomGeneratorSeed(gen, 12345ULL));
-    generate_conditioned_matrix_cuda(cublas_handle, cusolver_handle, gen, n, n, kLog10Cond, d_A);
-    std::cerr << " done\nGenerating matrix B (cond 1e" << kLog10Cond << ")..." << std::flush;
-    CURAND_CHECK(curandSetPseudoRandomGeneratorSeed(gen, 67890ULL));
-    generate_conditioned_matrix_cuda(cublas_handle, cusolver_handle, gen, n, n, kLog10Cond, d_B);
-    std::cerr << " done" << std::endl;
-
-    const size_t ws_int8_12 = gemmul8::workSize<false, gemmul8::Backend::INT8>(n, n, n, kInt8Moduli12);
-    const size_t ws_int8_16 = gemmul8::workSize<false, gemmul8::Backend::INT8>(n, n, n, kInt8Moduli16);
-    const size_t ws_fp8_10  = gemmul8::workSize<false, gemmul8::Backend::FP8>(n, n, n, kFp8Moduli10);
-    const size_t ws_fp8_12  = gemmul8::workSize<false, gemmul8::Backend::FP8>(n, n, n, kFp8Moduli12);
-    const size_t ws_max     = std::max({ws_int8_12, ws_int8_16, ws_fp8_10, ws_fp8_12});
-
-    void* d_work;
-    CUDA_CHECK(cudaMalloc(&d_work, ws_max));
-
-    std::vector<double> h_C_ref(size), h_C_test(size);
-    const double alpha = 1.0, beta = 0.0;
-    const double mb = 1024.0 * 1024.0;
-
-    // Warmup (all methods) so timings exclude one-time allocation / autotuning.
-    std::cerr << "Warmup..." << std::flush;
-    for (int w = 0; w < kNumWarmup; w++) {
-        CUBLAS_CHECK(cublasDgemm(cublas_handle, CUBLAS_OP_N, CUBLAS_OP_N, n, n, n, &alpha, d_A, n, d_B, n,
-                                 &beta, d_C, n));
-        gemmul8::gemm<double, gemmul8::Backend::INT8>(cublas_handle, CUBLAS_OP_N, CUBLAS_OP_N, n, n, n,
-                                                      &alpha, d_A, n, d_B, n, &beta, d_C, n, kInt8Moduli12,
-                                                      kFastMode, d_work);
-        gemmul8::gemmLt<double, gemmul8::Backend::FP8>(cublaslt_handle, CUBLAS_OP_N, CUBLAS_OP_N, n, n, n,
-                                                       &alpha, d_A, n, d_B, n, &beta, d_C, n, kFp8Moduli10,
-                                                       kFastMode, d_work);
-    }
-    CUDA_CHECK(cudaDeviceSynchronize());
-    std::cerr << " done\nBenchmarking (" << kNumTimed << " runs/method)..." << std::flush;
-
-    std::vector<MethodResult> methods;
-
-    // 1. Native FP64 (reference)
-    {
-        MethodResult r;
-        r.name         = "FP64 (native)";
-        r.is_reference = true;
-        r.workspace_mb = 0.0;
-        time_dgemm(cublas_handle, n, d_A, d_B, d_C, alpha, beta, r.run_ms, h_C_ref);
-        r.frob_rel_err = 0.0;
-        summarize(r, n);
-        methods.push_back(r);
+    std::vector<BenchmarkResult> results;
+    for (int n : sizes) {
+        std::cerr << "Processing " << n << "x" << n << "..." << std::endl;
+        BenchmarkResult r = run_benchmark(n, cublas_handle, cublaslt_handle, cusolver_handle, gen);
+        print_run_stats_table(r);
+        results.push_back(std::move(r));
     }
 
-    auto add_int8 = [&](const char* name, int moduli, size_t ws) {
-        MethodResult r;
-        r.name         = name;
-        r.workspace_mb = ws / mb;
-        time_int8_ozaki(cublas_handle, n, d_A, d_B, d_C, alpha, beta, moduli, d_work, r.run_ms, h_C_test);
-        r.frob_rel_err = compute_frobenius_rel_error(h_C_ref.data(), h_C_test.data(), size);
-        summarize(r, n);
-        methods.push_back(r);
-    };
-    auto add_fp8 = [&](const char* name, int moduli, size_t ws) {
-        MethodResult r;
-        r.name         = name;
-        r.workspace_mb = ws / mb;
-        time_fp8_ozaki(cublaslt_handle, n, d_A, d_B, d_C, alpha, beta, moduli, d_work, r.run_ms, h_C_test);
-        r.frob_rel_err = compute_frobenius_rel_error(h_C_ref.data(), h_C_test.data(), size);
-        summarize(r, n);
-        methods.push_back(r);
-    };
-
-    add_int8("INT8 Ozaki-II (12)", kInt8Moduli12, ws_int8_12);
-    add_int8("INT8 Ozaki-II (16)", kInt8Moduli16, ws_int8_16);
-    add_fp8("FP8 Ozaki-II (10)", kFp8Moduli10, ws_fp8_10);
-    add_fp8("FP8 Ozaki-II (12)", kFp8Moduli12, ws_fp8_12);
-    std::cerr << " done" << std::endl;
-
-    // On-screen tables (like the HIP file), then the LaTeX table.
-    print_run_stats_table(n, methods);
-    print_summary_table(n, device, methods);
+    print_summary_tables(results, device);
     std::cout << std::endl;
-    write_latex_table(std::cout, n, device, methods);
+    write_latex_table(std::cout, results, device);
 
     if (!tex_path.empty()) {
         std::ofstream tex(tex_path);
         if (!tex.is_open()) {
             std::cerr << "Failed to open " << tex_path << std::endl;
         } else {
-            write_latex_table(tex, n, device, methods);
+            write_latex_table(tex, results, device);
             std::cerr << "Wrote LaTeX table to " << tex_path << std::endl;
         }
     }
 
-    CUDA_CHECK(cudaFree(d_work));
-    CUDA_CHECK(cudaFree(d_A));
-    CUDA_CHECK(cudaFree(d_B));
-    CUDA_CHECK(cudaFree(d_C));
     CURAND_CHECK(curandDestroyGenerator(gen));
     CUSOLVER_CHECK(cusolverDnDestroy(cusolver_handle));
     CUBLASLT_CHECK(cublasLtDestroy(cublaslt_handle));
