@@ -34,7 +34,11 @@ Computes C = A × A (matrix multiplied with itself) and reports:
 
 - AMD GPU with ROCm support
 - ROCm 5.0+ installed (includes rocBLAS, rocSOLVER, hipRAND, hipBLAS)
-- GEMMul8 library (located at `/home/kswirydo/GEMMul8/GEMMul8`)
+- GEMMul8 library — **external dependency**. Clone and build it from
+  [RIKEN-RCCS/GEMMul8](https://github.com/RIKEN-RCCS/GEMMul8), then point the
+  include/library paths in the build commands below at your local checkout
+  (the paths in this README, e.g. `/home/kswirydo/GEMMul8/GEMMul8`, are examples
+  and should be replaced with your own).
 - ~100+ GB GPU memory for default 54272×54272 matrices
 
 ## Building
