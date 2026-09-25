@@ -43,8 +43,9 @@ Computes C = A × A (matrix multiplied with itself) and reports:
 - ozablas — **external dependency** (used for the Ozaki-I accuracy results,
   e.g. `figs/ozaki1_accuracy.jpg`). Clone and build it from
   [IlyaNyrkov/ozablas](https://github.com/IlyaNyrkov/ozablas) (paper used commit
-  `043719e`). Ozaki-I results are produced by running ozablas directly; this repo
-  contains no ozablas source.
+  `043719e`). This repo contains no ozablas source, but the benchmark harness
+  used to produce the Ozaki-I results (MI355X) lives in
+  [`ozablas_test/`](ozablas_test/README.md).
 - Enough GPU memory for the chosen matrix size (the default 4096×4096 needs
   ~1 GB; very large sizes such as 54272×54272 need 100+ GB)
 
