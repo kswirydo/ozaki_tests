@@ -12,7 +12,7 @@
  * Usage:
  *   ./matrix_generator [m] [n] [output_folder]
  *   
- *   m, n          - Matrix dimensions (default: 54272 x 54272)
+ *   m, n          - Matrix dimensions (default: 4096 x 4096)
  *   output_folder - Folder to save matrices (default: auto-generated from timestamp)
  */
 
@@ -271,12 +271,12 @@ void print_usage(const char* program_name) {
     std::cout << "Usage: " << program_name << " [m] [n] [output_folder]" << std::endl;
     std::cout << std::endl;
     std::cout << "Arguments:" << std::endl;
-    std::cout << "  m             - Number of rows (default: 54272)" << std::endl;
-    std::cout << "  n             - Number of columns (default: 54272)" << std::endl;
+    std::cout << "  m             - Number of rows (default: 4096)" << std::endl;
+    std::cout << "  n             - Number of columns (default: 4096)" << std::endl;
     std::cout << "  output_folder - Folder to save matrices (default: matrices_MxN_YYYYMMDD_HHMMSS)" << std::endl;
     std::cout << std::endl;
     std::cout << "Examples:" << std::endl;
-    std::cout << "  " << program_name << "                      # 54272x54272, auto folder" << std::endl;
+    std::cout << "  " << program_name << "                      # 4096x4096, auto folder" << std::endl;
     std::cout << "  " << program_name << " 4096 4096             # 4096x4096, auto folder" << std::endl;
     std::cout << "  " << program_name << " 4096 4096 my_matrices # 4096x4096, folder 'my_matrices'" << std::endl;
 }
@@ -288,9 +288,9 @@ int main(int argc, char* argv[]) {
         return 0;
     }
     
-    // Default matrix dimensions (same as MATLAB code)
-    int m = 54272;
-    int n = 54272;
+    // Default matrix dimensions
+    int m = 4096;
+    int n = 4096;
     std::string output_folder;
     
     // Parse command line arguments

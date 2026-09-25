@@ -238,8 +238,8 @@ int main(int argc, char* argv[]) {
         print_usage(argv[0]);
         return 0;
     }
-    int m = 54272;
-    int n = 54272;
+    int m = 4096;
+    int n = 4096;
     std::string output_folder;
     if (argc >= 3) {
         m = atoi(argv[1]);

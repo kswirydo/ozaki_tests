@@ -39,7 +39,8 @@ Computes C = A × A (matrix multiplied with itself) and reports:
   include/library paths in the build commands below at your local checkout
   (the paths in this README, e.g. `/home/kswirydo/GEMMul8/GEMMul8`, are examples
   and should be replaced with your own).
-- ~100+ GB GPU memory for default 54272×54272 matrices
+- Enough GPU memory for the chosen matrix size (the default 4096×4096 needs
+  ~1 GB; very large sizes such as 54272×54272 need 100+ GB)
 
 ## Building
 
@@ -75,11 +76,11 @@ hipcc -O3 -std=c++17 gemm_benchmark.cu -o gemm_benchmark \
 ### Generate matrices
 
 ```bash
-# Default: 54272 x 54272 matrices, auto-generated folder name
+# Default: 4096 x 4096 matrices, auto-generated folder name
 ./matrix_generator
 
 # Custom dimensions, auto-generated folder name
-./matrix_generator 4096 4096
+./matrix_generator 8192 8192
 
 # Custom dimensions with specified output folder
 ./matrix_generator 4096 4096 my_matrices
@@ -143,7 +144,8 @@ For an n×n matrix:
 - Matrix generator: ~5n² doubles ≈ 40n² bytes
 - GEMM benchmark: ~4n² doubles ≈ 32n² bytes + GEMMul8 workspace
 
-For 54272×54272: approximately **93 GB** GPU memory for generator, **70+ GB** for benchmark.
+For the default 4096×4096: approximately **0.7 GB** GPU memory for generator, **0.5 GB** for benchmark.
+For very large sizes such as 54272×54272: approximately **93 GB** for generator, **70+ GB** for benchmark.
 
 ## Notes
 
