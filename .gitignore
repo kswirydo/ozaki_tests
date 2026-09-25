@@ -1,6 +1,8 @@
 # Compiled binaries
 matrix_generator
 gemm_benchmark
+ozablas_test/table_benchmark
+ozablas_test/build/
 ab_matrix_generator
 ab_gemm_benchmark
 simple_matrix_generator
