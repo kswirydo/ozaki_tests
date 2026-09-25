@@ -1,0 +1,185 @@
+{
+  "power_profile": "/home/kswirydo/rocEMU/power_profile_20260602_113432.txt",
+  "benchmark_log": "/home/kswirydo/rocEMU/benchmark_log_20260602_113432.txt",
+  "device_index": 0,
+  "power_caps_w": [
+    1400,
+    1400,
+    1400,
+    1400,
+    1400,
+    1400,
+    1400,
+    1400
+  ],
+  "phases": [
+    {
+      "phase": "native_gemm",
+      "size": 4096,
+      "start_us": 1780418074551369,
+      "end_us": 1780418074646455,
+      "avg_power_w": 251.0,
+      "energy_j": 22.726794999999996,
+      "duration_s": 0.090545,
+      "n_samples": 10
+    },
+    {
+      "phase": "ozaki12",
+      "size": 4096,
+      "start_us": 1780418075075358,
+      "end_us": 1780418075168776,
+      "avg_power_w": 251.9,
+      "energy_j": 22.812827,
+      "duration_s": 0.090567,
+      "n_samples": 10
+    },
+    {
+      "phase": "ozaki16",
+      "size": 4096,
+      "start_us": 1780418075203883,
+      "end_us": 1780418075326533,
+      "avg_power_w": 251.25,
+      "energy_j": 27.802073,
+      "duration_s": 0.110645,
+      "n_samples": 12
+    },
+    {
+      "phase": "native_gemm",
+      "size": 8192,
+      "start_us": 1780418079577345,
+      "end_us": 1780418080366454,
+      "avg_power_w": 251.0,
+      "energy_j": 194.426608,
+      "duration_s": 0.774608,
+      "n_samples": 78
+    },
+    {
+      "phase": "ozaki12",
+      "size": 8192,
+      "start_us": 1780418080646082,
+      "end_us": 1780418081084545,
+      "avg_power_w": 251.29545454545453,
+      "energy_j": 108.68800399999998,
+      "duration_s": 0.432499,
+      "n_samples": 44
+    },
+    {
+      "phase": "ozaki16",
+      "size": 8192,
+      "start_us": 1780418081238072,
+      "end_us": 1780418081812142,
+      "avg_power_w": 251.17543859649123,
+      "energy_j": 141.489884,
+      "duration_s": 0.563304,
+      "n_samples": 57
+    },
+    {
+      "phase": "native_gemm",
+      "size": 16384,
+      "start_us": 1780418087149630,
+      "end_us": 1780418093390984,
+      "avg_power_w": 240.0193548387097,
+      "energy_j": 1494.517676,
+      "duration_s": 6.226654,
+      "n_samples": 620
+    },
+    {
+      "phase": "ozaki12",
+      "size": 16384,
+      "start_us": 1780418094720953,
+      "end_us": 1780418097435708,
+      "avg_power_w": 240.11481481481482,
+      "energy_j": 649.70741,
+      "duration_s": 2.705815,
+      "n_samples": 270
+    },
+    {
+      "phase": "ozaki16",
+      "size": 16384,
+      "start_us": 1780418098384962,
+      "end_us": 1780418101948933,
+      "avg_power_w": 240.16949152542372,
+      "energy_j": 852.824377,
+      "duration_s": 3.550962,
+      "n_samples": 354
+    }
+  ],
+  "summary": {
+    "total_native_energy_j": 1711.671079,
+    "total_emulated_energy_j": 1803.3245749999999,
+    "overall_energy_ratio": 1.0535462082198328
+  },
+  "by_phase_type": {
+    "native_gemm": {
+      "energy_j": 1711.671079,
+      "duration_s": 7.091807,
+      "sizes": [
+        4096,
+        8192,
+        16384
+      ],
+      "avg_power_w": 241.35894829061195
+    },
+    "ozaki12": {
+      "energy_j": 781.2082409999999,
+      "duration_s": 3.228881,
+      "sizes": [
+        4096,
+        8192,
+        16384
+      ],
+      "avg_power_w": 241.94395550656714
+    },
+    "ozaki16": {
+      "energy_j": 1022.116334,
+      "duration_s": 4.2249110000000005,
+      "sizes": [
+        4096,
+        8192,
+        16384
+      ],
+      "avg_power_w": 241.92612199404908
+    }
+  },
+  "by_size": {
+    "4096": {
+      "native": {
+        "energy_j": 22.726794999999996,
+        "avg_power_w": 251.0,
+        "duration_s": 0.090545
+      },
+      "emulated": {
+        "energy_j": 50.6149,
+        "avg_power_w": 251.55010635548575,
+        "duration_s": 0.201212
+      },
+      "energy_ratio": 2.227102413692736
+    },
+    "8192": {
+      "native": {
+        "energy_j": 194.426608,
+        "avg_power_w": 251.0,
+        "duration_s": 0.774608
+      },
+      "emulated": {
+        "energy_j": 250.17788799999997,
+        "avg_power_w": 251.23231000509134,
+        "duration_s": 0.995803
+      },
+      "energy_ratio": 1.2867471719714412
+    },
+    "16384": {
+      "native": {
+        "energy_j": 1494.517676,
+        "avg_power_w": 240.0193548387097,
+        "duration_s": 6.226654
+      },
+      "emulated": {
+        "energy_j": 1502.531787,
+        "avg_power_w": 240.14469222732407,
+        "duration_s": 6.256777
+      },
+      "energy_ratio": 1.0053623393879485
+    }
+  }
+}

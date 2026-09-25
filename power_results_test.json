@@ -1,0 +1,205 @@
+{
+  "power_profile": "power_profile_20260602_113432.txt",
+  "benchmark_log": "benchmark_log_20260602_113432.txt",
+  "device_index": 0,
+  "power_caps_w": [
+    1400,
+    1400,
+    1400,
+    1400,
+    1400,
+    1400,
+    1400,
+    1400
+  ],
+  "phases": [
+    {
+      "phase": "native_gemm",
+      "size": 4096,
+      "start_us": 1780418074551369,
+      "end_us": 1780418074646455,
+      "avg_power_w": 251.0,
+      "energy_j": 23.866585999999995,
+      "duration_s": 0.095086,
+      "n_samples": 10
+    },
+    {
+      "phase": "ozaki12",
+      "size": 4096,
+      "start_us": 1780418075075358,
+      "end_us": 1780418075168776,
+      "avg_power_w": 251.9,
+      "energy_j": 23.531277499999998,
+      "duration_s": 0.093418,
+      "n_samples": 10
+    },
+    {
+      "phase": "ozaki16",
+      "size": 4096,
+      "start_us": 1780418075203883,
+      "end_us": 1780418075326533,
+      "avg_power_w": 251.25,
+      "energy_j": 30.813167,
+      "duration_s": 0.12265,
+      "n_samples": 12
+    },
+    {
+      "phase": "native_gemm",
+      "size": 8192,
+      "start_us": 1780418079577345,
+      "end_us": 1780418080366454,
+      "avg_power_w": 251.0,
+      "energy_j": 198.06635899999998,
+      "duration_s": 0.789109,
+      "n_samples": 78
+    },
+    {
+      "phase": "ozaki12",
+      "size": 8192,
+      "start_us": 1780418080646082,
+      "end_us": 1780418081084545,
+      "avg_power_w": 251.29545454545453,
+      "energy_j": 110.1849685,
+      "duration_s": 0.438463,
+      "n_samples": 44
+    },
+    {
+      "phase": "ozaki16",
+      "size": 8192,
+      "start_us": 1780418081238072,
+      "end_us": 1780418081812142,
+      "avg_power_w": 251.17543859649123,
+      "energy_j": 144.192207,
+      "duration_s": 0.57407,
+      "n_samples": 57
+    },
+    {
+      "phase": "native_gemm",
+      "size": 16384,
+      "start_us": 1780418087149630,
+      "end_us": 1780418093390984,
+      "avg_power_w": 240.0193548387097,
+      "energy_j": 1498.0492014999998,
+      "duration_s": 6.241354,
+      "n_samples": 620
+    },
+    {
+      "phase": "ozaki12",
+      "size": 16384,
+      "start_us": 1780418094720953,
+      "end_us": 1780418097435708,
+      "avg_power_w": 240.11481481481482,
+      "energy_j": 651.8530094999999,
+      "duration_s": 2.714755,
+      "n_samples": 270
+    },
+    {
+      "phase": "ozaki16",
+      "size": 16384,
+      "start_us": 1780418098384962,
+      "end_us": 1780418101948933,
+      "avg_power_w": 240.16949152542372,
+      "energy_j": 855.9552709999999,
+      "duration_s": 3.563971,
+      "n_samples": 354
+    }
+  ],
+  "by_phase_type": {
+    "native_gemm": {
+      "energy_j": 1719.9821464999998,
+      "duration_s": 7.125549,
+      "sizes": [
+        4096,
+        8192,
+        16384
+      ],
+      "avg_power_w": 241.38240386810892
+    },
+    "ozaki12": {
+      "energy_j": 785.5692554999998,
+      "duration_s": 3.2466359999999996,
+      "sizes": [
+        4096,
+        8192,
+        16384
+      ],
+      "avg_power_w": 241.96406850044167
+    },
+    "ozaki16": {
+      "energy_j": 1030.9606449999999,
+      "duration_s": 4.260691,
+      "sizes": [
+        4096,
+        8192,
+        16384
+      ],
+      "avg_power_w": 241.97029190804966
+    }
+  },
+  "by_size": {
+    "4096": {
+      "native": {
+        "energy_j": 23.866585999999995,
+        "avg_power_w": 251.0,
+        "duration_s": 0.095086
+      },
+      "ozaki12": {
+        "energy_j": 23.531277499999998,
+        "avg_power_w": 251.9,
+        "duration_s": 0.093418
+      },
+      "ozaki16": {
+        "energy_j": 30.813167,
+        "avg_power_w": 251.25,
+        "duration_s": 0.12265
+      },
+      "ratio_oz12_native": 0.9859507136881666,
+      "ratio_oz16_native": 1.2910588468748738
+    },
+    "8192": {
+      "native": {
+        "energy_j": 198.06635899999998,
+        "avg_power_w": 251.0,
+        "duration_s": 0.789109
+      },
+      "ozaki12": {
+        "energy_j": 110.1849685,
+        "avg_power_w": 251.29545454545453,
+        "duration_s": 0.438463
+      },
+      "ozaki16": {
+        "energy_j": 144.192207,
+        "avg_power_w": 251.17543859649123,
+        "duration_s": 0.57407
+      },
+      "ratio_oz12_native": 0.5563032968157909,
+      "ratio_oz16_native": 0.7279994832438961
+    },
+    "16384": {
+      "native": {
+        "energy_j": 1498.0492014999998,
+        "avg_power_w": 240.0193548387097,
+        "duration_s": 6.241354
+      },
+      "ozaki12": {
+        "energy_j": 651.8530094999999,
+        "avg_power_w": 240.11481481481482,
+        "duration_s": 2.714755
+      },
+      "ozaki16": {
+        "energy_j": 855.9552709999999,
+        "avg_power_w": 240.16949152542372,
+        "duration_s": 3.563971
+      },
+      "ratio_oz12_native": 0.4351345795901083,
+      "ratio_oz16_native": 0.5713799454269795
+    }
+  },
+  "summary": {
+    "total_native_energy_j": 1719.9821464999998,
+    "total_oz12_energy_j": 785.5692554999998,
+    "total_oz16_energy_j": 1030.9606449999999,
+    "ratio_oz12_native": 0.45673105217897675,
+    "ratio_oz16_native": 0.5994019455945556
+  }
+}
