@@ -15,6 +15,7 @@
 #include <vector>
 
 #include "gemmul8.hpp"
+#include "gemmul8_helpers.cuh"
 
 static const int NUM_WARMUP = 10;
 static const int NUM_ITERATIONS = 50;
@@ -122,7 +123,7 @@ BenchmarkResult run_benchmark(size_t n) {
         bytes,
         cudaMemcpyDeviceToHost
     ));
-    size_t worksize = gemmul8::workSize(n,
+    size_t worksize = gemmul8_gemm_worksize(n,
         n,
         n,
         16
@@ -222,12 +223,12 @@ void print_table_header() {
 
 void print_table_row(size_t n, const BenchmarkResult& r) {
     size_t matrix_mem = 2 * n * n * sizeof(double);
-    size_t ozaki_ws_12 = gemmul8::workSize(n,
+    size_t ozaki_ws_12 = gemmul8_gemm_worksize(n,
         n,
         n,
         12
     );
-    size_t ozaki_ws_16 = gemmul8::workSize(n,
+    size_t ozaki_ws_16 = gemmul8_gemm_worksize(n,
         n,
         n,
         16

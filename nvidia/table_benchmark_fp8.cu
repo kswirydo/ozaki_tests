@@ -34,6 +34,7 @@ static constexpr gemmul8::Backend kEmuBackend = gemmul8::Backend::FP8;
 static const int NUM_WARMUP = 10;
 static const int NUM_ITERATIONS = 50;
 static const int LOG10_COND = 8;
+static const int OZAKI_MODULI[] = {10, 12};
 
 double compute_frobenius_rel_error(const double* C_ref, const double* C_test, size_t n) {
     double diff_sum = 0.0, norm_sum = 0.0;
@@ -47,10 +48,10 @@ double compute_frobenius_rel_error(const double* C_ref, const double* C_test, si
 
 struct BenchmarkResultFp8 {
     double native_tflops;
+    double ozaki10_tflops;
+    double ozaki10_error;
     double ozaki12_tflops;
     double ozaki12_error;
-    double ozaki16_tflops;
-    double ozaki16_error;
 };
 
 BenchmarkResultFp8 run_benchmark_fp8(size_t n) {
@@ -140,7 +141,7 @@ BenchmarkResultFp8 run_benchmark_fp8(size_t n) {
         cudaMemcpyDeviceToHost
     ));
 
-    for (int moduli : {12, 16}) {
+    for (int moduli : OZAKI_MODULI) {
         std::cerr << "  Benchmarking Ozaki-II FP8 (" << moduli << " moduli)..." << std::flush;
         size_t worksize = gemmul8::workSize<false, kEmuBackend>(n,
             n,
@@ -206,12 +207,12 @@ BenchmarkResultFp8 run_benchmark_fp8(size_t n) {
             h_C_ozaki.data(),
             size
         );
-        if (moduli == 12) {
+        if (moduli == OZAKI_MODULI[0]) {
+            result.ozaki10_tflops = tflops;
+            result.ozaki10_error = error;
+        } else {
             result.ozaki12_tflops = tflops;
             result.ozaki12_error = error;
-        } else {
-            result.ozaki16_tflops = tflops;
-            result.ozaki16_error = error;
         }
         std::cerr << " " << tflops << " TFLOPS, error=" << error << std::endl;
         CUDA_CHECK(cudaFree(d_work));
@@ -229,7 +230,7 @@ BenchmarkResultFp8 run_benchmark_fp8(size_t n) {
 void print_table_header() {
     std::cout << "+-------------+----------+----------+----------+-------------+-----------------------------+-----------------------------+"
               << std::endl;
-    std::cout << "| Matrix Size | Matrices | WS 12spl | WS 16spl | Native GEMM | Ozaki FP8 (12 splits)        | Ozaki FP8 (16 splits)        |"
+    std::cout << "| Matrix Size | Matrices | WS 10spl | WS 12spl | Native GEMM | Ozaki FP8 (10 splits)        | Ozaki FP8 (12 splits)        |"
               << std::endl;
     std::cout << "+-------------+----------+----------+----------+-------------+-----------------------------+-----------------------------+"
               << std::endl;
@@ -241,26 +242,26 @@ void print_table_header() {
 
 void print_table_row(size_t n, const BenchmarkResultFp8& r) {
     size_t matrix_mem = 2 * n * n * sizeof(double);
+    size_t ozaki_ws_10 = gemmul8::workSize<false, kEmuBackend>(n,
+        n,
+        n,
+        OZAKI_MODULI[0]
+    );
     size_t ozaki_ws_12 = gemmul8::workSize<false, kEmuBackend>(n,
         n,
         n,
-        12
-    );
-    size_t ozaki_ws_16 = gemmul8::workSize<false, kEmuBackend>(n,
-        n,
-        n,
-        16
+        OZAKI_MODULI[1]
     );
     double matrix_mb = matrix_mem / (1024.0 * 1024.0);
+    double ozaki_mb_10 = ozaki_ws_10 / (1024.0 * 1024.0);
     double ozaki_mb_12 = ozaki_ws_12 / (1024.0 * 1024.0);
-    double ozaki_mb_16 = ozaki_ws_16 / (1024.0 * 1024.0);
     std::cout << "| " << std::setw(11) << n << " | " << std::setw(8) << std::fixed << std::setprecision(1) << matrix_mb
-              << " | " << std::setw(8) << std::setprecision(1) << ozaki_mb_12 << " | " << std::setw(8) << std::setprecision(1)
-              << ozaki_mb_16 << " | " << std::setw(8) << std::setprecision(2) << r.native_tflops << " TF"
-              << " | " << std::setw(8) << std::setprecision(2) << r.ozaki12_tflops << " TF"
-              << " | " << std::scientific << std::setprecision(2) << r.ozaki12_error << " | " << std::fixed << std::setw(8)
-              << std::setprecision(2) << r.ozaki16_tflops << " TF"
-              << " | " << std::scientific << std::setprecision(2) << r.ozaki16_error << " |" << std::endl;
+              << " | " << std::setw(8) << std::setprecision(1) << ozaki_mb_10 << " | " << std::setw(8) << std::setprecision(1)
+              << ozaki_mb_12 << " | " << std::setw(8) << std::setprecision(2) << r.native_tflops << " TF"
+              << " | " << std::setw(8) << std::setprecision(2) << r.ozaki10_tflops << " TF"
+              << " | " << std::scientific << std::setprecision(2) << r.ozaki10_error << " | " << std::fixed << std::setw(8)
+              << std::setprecision(2) << r.ozaki12_tflops << " TF"
+              << " | " << std::scientific << std::setprecision(2) << r.ozaki12_error << " |" << std::endl;
 }
 
 void print_table_footer() {

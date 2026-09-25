@@ -39,6 +39,10 @@ awkward_matrices*.txt
 Ozaki_SC_paper.pdf
 performance_comparison*.jpg
 
+# ...but keep curated figures committed under figs/
+!figs/
+!figs/**
+
 # Object files
 *.o
 *.obj
