@@ -34,11 +34,17 @@ Computes C = A × A (matrix multiplied with itself) and reports:
 
 - AMD GPU with ROCm support
 - ROCm 5.0+ installed (includes rocBLAS, rocSOLVER, hipRAND, hipBLAS)
-- GEMMul8 library — **external dependency**. Clone and build it from
+- GEMMul8 library — **external dependency** (used for the Ozaki-II results).
+  Clone and build it from
   [RIKEN-RCCS/GEMMul8](https://github.com/RIKEN-RCCS/GEMMul8), then point the
   include/library paths in the build commands below at your local checkout
   (the paths in this README, e.g. `/home/kswirydo/GEMMul8/GEMMul8`, are examples
   and should be replaced with your own).
+- ozablas — **external dependency** (used for the Ozaki-I accuracy results,
+  e.g. `figs/ozaki1_accuracy.jpg`). Clone and build it from
+  [IlyaNyrkov/ozablas](https://github.com/IlyaNyrkov/ozablas) (paper used commit
+  `043719e`). Ozaki-I results are produced by running ozablas directly; this repo
+  contains no ozablas source.
 - Enough GPU memory for the chosen matrix size (the default 4096×4096 needs
   ~1 GB; very large sizes such as 54272×54272 need 100+ GB)
 
