@@ -1,4 +1,0 @@
-A_B_matrices/*.txt filter=lfs diff=lfs merge=lfs -text
-c_results/*.txt filter=lfs diff=lfs merge=lfs -text
-c_results_b300/*.txt filter=lfs diff=lfs merge=lfs -text
-c_results_b200/*.txt filter=lfs diff=lfs merge=lfs -text

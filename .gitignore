@@ -22,6 +22,23 @@ gemm_benchmark_*.csv
 ab_gemm_benchmark_*.csv
 simple_gemm_benchmark_*.csv
 
+# Generated data / artifacts (kept out of the paper branch)
+*.csv
+*.json
+*.png
+*.db
+*.log
+*.m
+results_*.txt
+scaling_results.txt
+benchmark_log_*.txt
+benchmark_out_*.txt
+awkward_matrices*.txt
+
+# Paper reference and generated figures (not committed)
+Ozaki_SC_paper.pdf
+performance_comparison*.jpg
+
 # Object files
 *.o
 *.obj
