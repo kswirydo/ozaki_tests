@@ -21,7 +21,7 @@
 
 // Include internal header to access profiling flag
 // This allows GEMMUL8_PROFILE=1 to work
-namespace oz2 { extern bool g_profiling_enabled; }
+namespace oz2 { bool g_profiling_enabled = false; }
 
 #include <iostream>
 #include <fstream>

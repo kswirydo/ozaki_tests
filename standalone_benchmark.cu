@@ -17,7 +17,7 @@
 #include <cstdlib>
 
 // Enable GEMMUL8_PROFILE support
-namespace oz2 { extern bool g_profiling_enabled; }
+namespace oz2 { bool g_profiling_enabled = false; }
 
 #include <iostream>
 #include <iomanip>
