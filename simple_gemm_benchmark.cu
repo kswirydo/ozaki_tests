@@ -362,8 +362,8 @@ int main(int argc, char* argv[]) {
     // Get Ozaki-II workspace sizes for different moduli counts
     unsigned max_moduli = *std::max_element(NUM_MODULI_LIST.begin(), NUM_MODULI_LIST.end());
     unsigned min_moduli = *std::min_element(NUM_MODULI_LIST.begin(), NUM_MODULI_LIST.end());
-    size_t worksize_max = gemmul8::workSize(N, M, K, max_moduli);
-    size_t worksize_min = gemmul8::workSize(N, M, K, min_moduli);
+    size_t worksize_max = gemmul8::workSize<false, gemmul8::Backend::INT8>(N, M, K, max_moduli);
+    size_t worksize_min = gemmul8::workSize<false, gemmul8::Backend::INT8>(N, M, K, min_moduli);
     size_t mem_ozaki_total_max = mem_A + mem_B + mem_C + worksize_max;
     size_t mem_ozaki_total_min = mem_A + mem_B + mem_C + worksize_min;
     
@@ -500,7 +500,7 @@ int main(int argc, char* argv[]) {
     // Test different number of moduli and both fast/accurate modes
     for (unsigned num_moduli : NUM_MODULI_LIST) {
         // Get workspace size for this moduli count
-        size_t worksize_this = gemmul8::workSize(N, M, K, num_moduli);
+        size_t worksize_this = gemmul8::workSize<false, gemmul8::Backend::INT8>(N, M, K, num_moduli);
         
         for (int fast_mode = 0; fast_mode <= 1; fast_mode++) {
             bool fastmode = (fast_mode == 1);

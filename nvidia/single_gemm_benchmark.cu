@@ -56,7 +56,7 @@ int main(int argc, char* argv[]) {
     size_t size_A = M * K;
     size_t size_B = K * N;
     size_t size_C = M * N;
-    size_t mem_total = (size_A + size_B + 2 * size_C) * sizeof(double) + gemmul8::workSize(M,
+    size_t mem_total = (size_A + size_B + 2 * size_C) * sizeof(double) + gemmul8::workSize<false, gemmul8::Backend::INT8>(M,
         N,
         K,
         16
@@ -95,7 +95,7 @@ int main(int argc, char* argv[]) {
         size_C * sizeof(double)
     ));
     CUDA_CHECK(cudaMalloc(&d_work,
-        gemmul8::workSize(M,
+        gemmul8::workSize<false, gemmul8::Backend::INT8>(M,
             N,
             K,
             16

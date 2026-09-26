@@ -304,8 +304,8 @@ void benchmark_matrix_pair(hipblasHandle_t handle, const MatrixPair& pair, std::
     
     unsigned max_moduli = *std::max_element(NUM_MODULI_LIST.begin(), NUM_MODULI_LIST.end());
     unsigned min_moduli = *std::min_element(NUM_MODULI_LIST.begin(), NUM_MODULI_LIST.end());
-    size_t worksize_max = gemmul8::workSize(N, M, K, max_moduli);
-    size_t worksize_min = gemmul8::workSize(N, M, K, min_moduli);
+    size_t worksize_max = gemmul8::workSize<false, gemmul8::Backend::INT8>(N, M, K, max_moduli);
+    size_t worksize_min = gemmul8::workSize<false, gemmul8::Backend::INT8>(N, M, K, min_moduli);
     
     size_t mem_ozaki_total_min = mem_fp64_total + worksize_min;
     size_t mem_ozaki_total_max = mem_fp64_total + worksize_max;
@@ -384,7 +384,7 @@ void benchmark_matrix_pair(hipblasHandle_t handle, const MatrixPair& pair, std::
     HIP_CHECK(hipMalloc(&d_work, worksize_max));
     
     for (unsigned num_moduli : NUM_MODULI_LIST) {
-        size_t worksize_this = gemmul8::workSize(N, M, K, num_moduli);
+        size_t worksize_this = gemmul8::workSize<false, gemmul8::Backend::INT8>(N, M, K, num_moduli);
         
         for (int fast_mode = 0; fast_mode <= 1; fast_mode++) {
             bool fastmode = (fast_mode == 1);

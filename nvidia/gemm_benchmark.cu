@@ -203,7 +203,7 @@ void benchmark_matrix(cublasHandle_t handle, const std::string& filename, int lo
     unsigned max_moduli = *std::max_element(NUM_MODULI_LIST.begin(),
         NUM_MODULI_LIST.end()
     );
-    size_t worksize = gemmul8::workSize(m,
+    size_t worksize = gemmul8::workSize<false, gemmul8::Backend::INT8>(m,
         n,
         n,
         max_moduli

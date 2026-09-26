@@ -168,7 +168,7 @@ int main(int argc, char* argv[]) {
     size_t mem_B = size_B * sizeof(double);
     size_t mem_C = size_C * sizeof(double);
     size_t mem_matrices = mem_A + mem_B + mem_C;
-    size_t mem_workspace = gemmul8::workSize(M, N, K, NUM_MODULI);
+    size_t mem_workspace = gemmul8::workSize<false, gemmul8::Backend::INT8>(M, N, K, NUM_MODULI);
     size_t mem_total = mem_matrices + mem_workspace;
     
     std::cout << "Standalone GEMM Benchmark" << std::endl;
@@ -196,7 +196,7 @@ int main(int argc, char* argv[]) {
     // Allocate device memory for matrices first
     double *d_A, *d_B, *d_C;
     void* d_work = nullptr;
-    size_t worksize = gemmul8::workSize(M, N, K, NUM_MODULI);
+    size_t worksize = gemmul8::workSize<false, gemmul8::Backend::INT8>(M, N, K, NUM_MODULI);
     
     HIP_CHECK(hipMalloc(&d_A, size_A * sizeof(double)));
     HIP_CHECK(hipMalloc(&d_B, size_B * sizeof(double)));

@@ -57,7 +57,7 @@ int main(int argc, char* argv[]) {
     ));
     double *d_A, *d_B, *d_C;
     void* d_work = nullptr;
-    size_t worksize = gemmul8::workSize(M,
+    size_t worksize = gemmul8::workSize<false, gemmul8::Backend::INT8>(M,
         N,
         K,
         NUM_MODULI

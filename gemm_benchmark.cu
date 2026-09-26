@@ -268,7 +268,7 @@ void benchmark_matrix(hipblasHandle_t handle,
     
     // Get maximum workspace size needed
     unsigned max_moduli = *std::max_element(NUM_MODULI_LIST.begin(), NUM_MODULI_LIST.end());
-    size_t worksize = gemmul8::workSize(m, n, n, max_moduli);
+    size_t worksize = gemmul8::workSize<false, gemmul8::Backend::INT8>(m, n, n, max_moduli);
     
     void* d_work;
     HIP_CHECK(hipMalloc(&d_work, worksize));

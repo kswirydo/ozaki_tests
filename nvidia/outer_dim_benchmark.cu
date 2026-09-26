@@ -49,7 +49,7 @@ bool run_benchmark(size_t N, size_t K, cublasHandle_t cublas, cusolverDnHandle_t
     size_t size_B = K * N;
     size_t size_C = N * N;
     size_t mem_matrices = (size_A + size_B + 2 * size_C) * sizeof(double);
-    size_t mem_workspace = gemmul8::workSize(N,
+    size_t mem_workspace = gemmul8::workSize<false, gemmul8::Backend::INT8>(N,
         N,
         K,
         16
@@ -158,7 +158,7 @@ bool run_benchmark(size_t N, size_t K, cublasHandle_t cublas, cusolverDnHandle_t
         size_C * sizeof(double),
         cudaMemcpyDeviceToHost
     ));
-    size_t worksize = gemmul8::workSize(N,
+    size_t worksize = gemmul8::workSize<false, gemmul8::Backend::INT8>(N,
         N,
         K,
         16

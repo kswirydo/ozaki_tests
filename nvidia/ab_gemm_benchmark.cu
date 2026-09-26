@@ -263,7 +263,7 @@ void benchmark_matrix_pair(cublasHandle_t handle, const MatrixPair& pair, std::o
     unsigned max_moduli = *std::max_element(NUM_MODULI_LIST.begin(),
         NUM_MODULI_LIST.end()
     );
-    size_t worksize_max = gemmul8::workSize(N,
+    size_t worksize_max = gemmul8::workSize<false, gemmul8::Backend::INT8>(N,
         M,
         K,
         max_moduli
@@ -348,7 +348,7 @@ void benchmark_matrix_pair(cublasHandle_t handle, const MatrixPair& pair, std::o
     ));
     std::cout << "\n--- Ozaki-II GEMM ---" << std::endl;
     for (unsigned num_moduli : NUM_MODULI_LIST) {
-        size_t worksize_this = gemmul8::workSize(N,
+        size_t worksize_this = gemmul8::workSize<false, gemmul8::Backend::INT8>(N,
             M,
             K,
             num_moduli

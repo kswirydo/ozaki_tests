@@ -273,12 +273,12 @@ int main(int argc, char* argv[]) {
     unsigned min_moduli = *std::min_element(NUM_MODULI_LIST.begin(),
         NUM_MODULI_LIST.end()
     );
-    size_t worksize_max = gemmul8::workSize(N,
+    size_t worksize_max = gemmul8::workSize<false, gemmul8::Backend::INT8>(N,
         M,
         K,
         max_moduli
     );
-    size_t worksize_min = gemmul8::workSize(N,
+    size_t worksize_min = gemmul8::workSize<false, gemmul8::Backend::INT8>(N,
         M,
         K,
         min_moduli
@@ -384,7 +384,7 @@ int main(int argc, char* argv[]) {
                  << std::endl;
     results_file << "cuBLAS_FP64,0,N/A," << cublas_time * 1000.0 << "," << cublas_tflops << ",0,0,0,0,0" << std::endl;
     for (unsigned num_moduli : NUM_MODULI_LIST) {
-        size_t worksize_this = gemmul8::workSize(N,
+        size_t worksize_this = gemmul8::workSize<false, gemmul8::Backend::INT8>(N,
             M,
             K,
             num_moduli

@@ -181,7 +181,7 @@ bool run_benchmark(size_t N, size_t K,
     
     // Calculate total memory needed
     size_t mem_matrices = (size_A + size_B + 2 * size_C) * sizeof(double);
-    size_t mem_workspace = gemmul8::workSize(N, N, K, 16);
+    size_t mem_workspace = gemmul8::workSize<false, gemmul8::Backend::INT8>(N, N, K, 16);
     size_t mem_total = mem_matrices + mem_workspace;
     
     // Check available memory first
@@ -260,7 +260,7 @@ bool run_benchmark(size_t N, size_t K,
     HIP_CHECK(hipMemcpy(h_C_native.data(), d_C_native, size_C * sizeof(double), hipMemcpyDeviceToHost));
     
     // Ozaki-II benchmarks
-    size_t worksize = gemmul8::workSize(N, N, K, 16);
+    size_t worksize = gemmul8::workSize<false, gemmul8::Backend::INT8>(N, N, K, 16);
     err = hipMalloc(&d_work, worksize);
     if (err != hipSuccess) {
         std::cerr << "  WARNING: Failed to allocate workspace: " << hipGetErrorString(err) << std::endl;

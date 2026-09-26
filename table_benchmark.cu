@@ -207,7 +207,7 @@ BenchmarkResult run_benchmark(size_t n) {
     HIP_CHECK(hipMemcpy(h_C_native.data(), d_C_native, bytes, hipMemcpyDeviceToHost));
     
     // Ozaki-II benchmarks
-    size_t worksize = gemmul8::workSize(n, n, n, 16);
+    size_t worksize = gemmul8::workSize<false, gemmul8::Backend::INT8>(n, n, n, 16);
     void* d_work;
     HIP_CHECK(hipMalloc(&d_work, worksize));
     
@@ -269,8 +269,8 @@ void print_table_header() {
 void print_table_row(size_t n, const BenchmarkResult& r) {
     // Calculate memory requirements
     size_t matrix_mem = 2 * n * n * sizeof(double);  // A and C matrices
-    size_t ozaki_ws_12 = gemmul8::workSize(n, n, n, 12);
-    size_t ozaki_ws_16 = gemmul8::workSize(n, n, n, 16);
+    size_t ozaki_ws_12 = gemmul8::workSize<false, gemmul8::Backend::INT8>(n, n, n, 12);
+    size_t ozaki_ws_16 = gemmul8::workSize<false, gemmul8::Backend::INT8>(n, n, n, 16);
     double matrix_mb = matrix_mem / (1024.0 * 1024.0);
     double ozaki_mb_12 = ozaki_ws_12 / (1024.0 * 1024.0);
     double ozaki_mb_16 = ozaki_ws_16 / (1024.0 * 1024.0);

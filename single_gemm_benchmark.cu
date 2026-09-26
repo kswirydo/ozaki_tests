@@ -180,8 +180,8 @@ int main(int argc, char* argv[]) {
     
     // Memory requirements
     size_t mem_matrices = (size_A + size_B + 2 * size_C) * sizeof(double);
-    size_t mem_workspace_12 = gemmul8::workSize(M, N, K, 12);
-    size_t mem_workspace_16 = gemmul8::workSize(M, N, K, 16);
+    size_t mem_workspace_12 = gemmul8::workSize<false, gemmul8::Backend::INT8>(M, N, K, 12);
+    size_t mem_workspace_16 = gemmul8::workSize<false, gemmul8::Backend::INT8>(M, N, K, 16);
     size_t mem_total = mem_matrices + mem_workspace_16;
     
     std::cout << "=========================================" << std::endl;
