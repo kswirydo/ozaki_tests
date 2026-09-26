@@ -31,6 +31,7 @@ simple_gemm_benchmark_*.csv
 *.db
 *.log
 *.m
+!matrix_generator.m
 results_*.txt
 scaling_results.txt
 benchmark_log_*.txt
