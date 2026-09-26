@@ -61,7 +61,9 @@ SRCS_ASPECT_RATIO_GENERATOR = aspect_ratio_generator.cu
 SRCS_TABLE_BENCHMARK_FP8 = table_benchmark_fp8.cu
 
 # Default target: build all
-all: $(TARGET_GENERATOR) $(TARGET_AB_GENERATOR) $(TARGET_SIMPLE_GENERATOR) $(TARGET_BENCHMARK) $(TARGET_AB_BENCHMARK) $(TARGET_SIMPLE_BENCHMARK)
+# Note: table_benchmark_fp8 is intentionally NOT in `all` because it requires a
+# GEMMul8 built with the FP8 backend. Build it explicitly: `make table_benchmark_fp8`.
+all: $(TARGET_GENERATOR) $(TARGET_AB_GENERATOR) $(TARGET_SIMPLE_GENERATOR) $(TARGET_BENCHMARK) $(TARGET_AB_BENCHMARK) $(TARGET_SIMPLE_BENCHMARK) $(TARGET_TABLE_BENCHMARK)
 
 # Matrix generator (condition number matrices for A*A benchmarks)
 $(TARGET_GENERATOR): $(SRCS_GENERATOR)
