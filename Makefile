@@ -26,7 +26,9 @@ LIBS_SIMPLE_GENERATOR = -lhiprand
 # Libraries for benchmark (includes GEMMul8)
 INCLUDES_BENCHMARK = $(INCLUDES) -I$(GEMMUL8_PATH)/include
 LDFLAGS_BENCHMARK = $(LDFLAGS) -L$(GEMMUL8_PATH)/lib -Wl,-rpath,$(GEMMUL8_PATH)/lib
-LIBS_BENCHMARK = -lgemmul8 -lhipblas -lamdhip64
+# GEMMul8's HIP backend uses hipBLASLt (e.g. hipblasLtMatmulDescCreate), so
+# -lhipblaslt is required for every GEMMul8-linked target.
+LIBS_BENCHMARK = -lgemmul8 -lhipblas -lhipblaslt -lamdhip64
 
 # Targets
 TARGET_GENERATOR = matrix_generator
@@ -41,9 +43,7 @@ TARGET_OUTER_DIM_BENCHMARK = outer_dim_benchmark
 TARGET_SINGLE_GEMM_BENCHMARK = single_gemm_benchmark
 TARGET_STANDALONE_BENCHMARK = standalone_benchmark
 TARGET_ASPECT_RATIO_GENERATOR = aspect_ratio_generator
-TARGET_TABLE_BENCHMARK_POWER = table_benchmark_power
 TARGET_TABLE_BENCHMARK_FP8 = table_benchmark_fp8
-TARGET_TABLE_BENCHMARK_POWER_FP8 = table_benchmark_power_fp8
 
 # Source files
 SRCS_GENERATOR = matrix_generator.cpp
@@ -58,9 +58,7 @@ SRCS_OUTER_DIM_BENCHMARK = outer_dim_benchmark.cu
 SRCS_SINGLE_GEMM_BENCHMARK = single_gemm_benchmark.cu
 SRCS_STANDALONE_BENCHMARK = standalone_benchmark.cu
 SRCS_ASPECT_RATIO_GENERATOR = aspect_ratio_generator.cu
-SRCS_TABLE_BENCHMARK_POWER = table_benchmark_power.cu
 SRCS_TABLE_BENCHMARK_FP8 = table_benchmark_fp8.cu
-SRCS_TABLE_BENCHMARK_POWER_FP8 = table_benchmark_power_fp8.cu
 
 # Default target: build all
 all: $(TARGET_GENERATOR) $(TARGET_AB_GENERATOR) $(TARGET_SIMPLE_GENERATOR) $(TARGET_BENCHMARK) $(TARGET_AB_BENCHMARK) $(TARGET_SIMPLE_BENCHMARK)
@@ -113,17 +111,9 @@ $(TARGET_STANDALONE_BENCHMARK): $(SRCS_STANDALONE_BENCHMARK)
 $(TARGET_ASPECT_RATIO_GENERATOR): $(SRCS_ASPECT_RATIO_GENERATOR)
 	$(HIPCC) $(CXXFLAGS) $(INCLUDES) $(SRCS_ASPECT_RATIO_GENERATOR) -o $(TARGET_ASPECT_RATIO_GENERATOR) $(LDFLAGS) -lhiprand
 
-# Table benchmark with power measurement markers
-$(TARGET_TABLE_BENCHMARK_POWER): $(SRCS_TABLE_BENCHMARK_POWER)
-	$(HIPCC) $(CXXFLAGS) $(INCLUDES_BENCHMARK) $(SRCS_TABLE_BENCHMARK_POWER) -o $(TARGET_TABLE_BENCHMARK_POWER) $(LDFLAGS_BENCHMARK) $(LIBS_BENCHMARK) $(LIBS_GENERATOR)
-
-# Table benchmark FP8 (without power measurement) - requires hipBLASLt
+# Table benchmark FP8 (requires hipBLASLt)
 $(TARGET_TABLE_BENCHMARK_FP8): $(SRCS_TABLE_BENCHMARK_FP8)
-	$(HIPCC) $(CXXFLAGS) $(INCLUDES_BENCHMARK) $(SRCS_TABLE_BENCHMARK_FP8) -o $(TARGET_TABLE_BENCHMARK_FP8) $(LDFLAGS_BENCHMARK) $(LIBS_BENCHMARK) $(LIBS_GENERATOR) -lhipblaslt
-
-# Table benchmark FP8 with power measurement markers - requires hipBLASLt
-$(TARGET_TABLE_BENCHMARK_POWER_FP8): $(SRCS_TABLE_BENCHMARK_POWER_FP8)
-	$(HIPCC) $(CXXFLAGS) $(INCLUDES_BENCHMARK) $(SRCS_TABLE_BENCHMARK_POWER_FP8) -o $(TARGET_TABLE_BENCHMARK_POWER_FP8) $(LDFLAGS_BENCHMARK) $(LIBS_BENCHMARK) $(LIBS_GENERATOR) -lhipblaslt
+	$(HIPCC) $(CXXFLAGS) $(INCLUDES_BENCHMARK) $(SRCS_TABLE_BENCHMARK_FP8) -o $(TARGET_TABLE_BENCHMARK_FP8) $(LDFLAGS_BENCHMARK) $(LIBS_BENCHMARK) $(LIBS_GENERATOR)
 
 # Build only generator
 generator: $(TARGET_GENERATOR)
@@ -155,14 +145,8 @@ outer_dim_benchmark: $(TARGET_OUTER_DIM_BENCHMARK)
 # Build only single GEMM benchmark
 single_gemm_benchmark: $(TARGET_SINGLE_GEMM_BENCHMARK)
 
-# Build table benchmark with power measurement markers
-table_benchmark_power: $(TARGET_TABLE_BENCHMARK_POWER)
-
 # Build table benchmark FP8
 table_benchmark_fp8: $(TARGET_TABLE_BENCHMARK_FP8)
-
-# Build table benchmark FP8 with power measurement markers
-table_benchmark_power_fp8: $(TARGET_TABLE_BENCHMARK_POWER_FP8)
 
 # Debug build
 debug: CXXFLAGS = -g -O0 -std=c++17 -Wall -DDEBUG
@@ -170,7 +154,7 @@ debug: all
 
 # Clean
 clean:
-	rm -f $(TARGET_GENERATOR) $(TARGET_AB_GENERATOR) $(TARGET_SIMPLE_GENERATOR) $(TARGET_BENCHMARK) $(TARGET_AB_BENCHMARK) $(TARGET_SIMPLE_BENCHMARK) $(TARGET_TABLE_BENCHMARK) $(TARGET_INNER_DIM_BENCHMARK) $(TARGET_OUTER_DIM_BENCHMARK) $(TARGET_SINGLE_GEMM_BENCHMARK) $(TARGET_STANDALONE_BENCHMARK) $(TARGET_ASPECT_RATIO_GENERATOR) $(TARGET_TABLE_BENCHMARK_POWER) $(TARGET_TABLE_BENCHMARK_FP8) $(TARGET_TABLE_BENCHMARK_POWER_FP8)
+	rm -f $(TARGET_GENERATOR) $(TARGET_AB_GENERATOR) $(TARGET_SIMPLE_GENERATOR) $(TARGET_BENCHMARK) $(TARGET_AB_BENCHMARK) $(TARGET_SIMPLE_BENCHMARK) $(TARGET_TABLE_BENCHMARK) $(TARGET_INNER_DIM_BENCHMARK) $(TARGET_OUTER_DIM_BENCHMARK) $(TARGET_SINGLE_GEMM_BENCHMARK) $(TARGET_STANDALONE_BENCHMARK) $(TARGET_ASPECT_RATIO_GENERATOR) $(TARGET_TABLE_BENCHMARK_FP8)
 	rm -f M_cond_*.txt A_*.txt B_*.txt
 	rm -f gemm_benchmark_*.csv ab_gemm_benchmark_*.csv simple_gemm_benchmark_*.csv
 
@@ -202,4 +186,4 @@ test: $(TARGET_GENERATOR) $(TARGET_BENCHMARK)
 	./$(TARGET_GENERATOR) 1024 1024 $(TEST_FOLDER)
 	LD_LIBRARY_PATH=$(GEMMUL8_PATH)/lib:$(ROCM_PATH)/lib:$$LD_LIBRARY_PATH ./$(TARGET_BENCHMARK) $(TEST_FOLDER)
 
-.PHONY: all generator ab_generator simple_generator benchmark ab_benchmark simple_benchmark table_benchmark table_benchmark_power table_benchmark_fp8 table_benchmark_power_fp8 inner_dim_benchmark outer_dim_benchmark single_gemm_benchmark debug clean test_generator run_benchmark run_ab_benchmark run_ab_benchmark_plot run_simple_benchmark test
+.PHONY: all generator ab_generator simple_generator benchmark ab_benchmark simple_benchmark table_benchmark table_benchmark_fp8 inner_dim_benchmark outer_dim_benchmark single_gemm_benchmark debug clean test_generator run_benchmark run_ab_benchmark run_ab_benchmark_plot run_simple_benchmark test
