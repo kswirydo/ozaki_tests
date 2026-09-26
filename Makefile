@@ -4,7 +4,7 @@
 ROCM_PATH ?= /opt/rocm
 
 # GEMMul8 path
-GEMMUL8_PATH ?= /home/kswirydo/GEMMul8/GEMMul8
+GEMMUL8_PATH ?= /home/kswirydo/GEMMul8
 
 # Compiler
 HIPCC = $(ROCM_PATH)/bin/hipcc
